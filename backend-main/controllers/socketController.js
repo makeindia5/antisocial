@@ -37,6 +37,19 @@ exports.init = (server) => {
             console.log(`User ${socket.id} left GD`);
         });
 
+        // Dynamic Group Chat (Announcements + Chat)
+        socket.on('joinGroup', (groupId) => {
+            const room = `group_${groupId}`;
+            socket.join(room);
+            console.log(`User ${socket.id} joined group room: ${room}`);
+        });
+
+        socket.on('leaveGroup', (groupId) => {
+            const room = `group_${groupId}`;
+            socket.leave(room);
+            console.log(`User ${socket.id} left group room: ${room}`);
+        });
+
         socket.on('sendMessage', async (data) => {
             console.log("Socket received message:", data);
             try {
@@ -54,14 +67,23 @@ exports.init = (server) => {
                     console.log("Routing to Announcement:", data.announcementId);
                     io.to(data.announcementId).emit('receiveAnnouncement', newMessage);
                 } else if (data.groupId) {
-                    // Group Chat (GD)
-                    console.log("Routing to GD Group:", data.groupId);
-                    io.to(data.groupId).emit('receiveMessage', newMessage);
+                    // Check if it's the fixed GD group or a dynamic announcement group
+                    if (data.groupId === 'finance-gd') {
+                        console.log("Routing to GD Group:", data.groupId);
+                        io.to(data.groupId).emit('receiveMessage', newMessage);
+                    } else {
+                        // Dynamic Group Room
+                        const room = `group_${data.groupId}`;
+                        console.log(`Routing to Group Room: ${room}`);
+                        io.to(room).emit('receiveMessage', newMessage);
+                    }
                 } else {
                     console.log("Message has no routing target!");
+                    socket.emit('messageError', { error: 'No routing target' });
                 }
             } catch (err) {
                 console.error("Message error:", err);
+                socket.emit('messageError', { error: err.message });
             }
         });
 

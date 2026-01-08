@@ -15,12 +15,17 @@ router.post('/meet', adminController.createMeet);
 router.post('/gd/status', adminController.updateGDStatus);
 router.get('/users', adminController.getAllUsers);
 router.delete('/announcement/:id', adminController.deleteAnnouncement);
+router.delete('/message/:id', adminController.deleteMessage);
 
 // Group Routes
 router.post('/group', adminController.createGroup);
 router.get('/group/list', adminController.getGroups);
+router.put('/group/:id', upload.single('icon'), adminController.updateGroup);
+router.get('/group/:id', adminController.getGroup);
 router.put('/group/:id/members', adminController.updateGroupMembers);
 router.get('/group/:id/announcements', adminController.getGroupAnnouncements);
+router.get('/group/:id/messages', adminController.getGroupMessages);
 router.delete('/group/:id', adminController.deleteGroup);
+router.post('/announcement/:id/vote', adminController.voteAnnouncement);
 
 module.exports = router;

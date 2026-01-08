@@ -204,6 +204,28 @@ exports.deleteAnnouncement = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
+} catch (error) {
+    res.status(500).json({ error: error.message });
+}
+};
+
+exports.deleteMessage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await require('../models/message').findByIdAndDelete(id);
+
+        // Broadcast deletion
+        try {
+            const io = require('../controllers/socketController').getIo();
+            io.emit('deleteAnnouncement', id); // Re-use event since frontend just filters by ID
+        } catch (e) {
+            console.log("Socket emit error:", e.message);
+        }
+
+        res.json({ message: 'Deleted' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };
 
 // Group Controllers
@@ -224,10 +246,38 @@ exports.createGroup = async (req, res) => {
     }
 };
 
+exports.updateGroup = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+        let updateData = {};
+        if (name) updateData.name = name;
+        if (req.file) {
+            updateData.icon = `/uploads/${req.file.filename}`;
+        }
+
+        console.log("Updating group:", id, updateData);
+        const group = await AnnouncementGroup.findByIdAndUpdate(id, updateData, { new: true });
+        res.json(group);
+    } catch (error) {
+        console.error("Update group error:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
 exports.getGroups = async (req, res) => {
     try {
         const groups = await AnnouncementGroup.find().populate('members', 'name email profilePic');
         res.json(groups);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getGroup = async (req, res) => {
+    try {
+        const group = await AnnouncementGroup.findById(req.params.id).populate('members', 'name email profilePic');
+        res.json(group);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -260,6 +310,72 @@ exports.deleteGroup = async (req, res) => {
         await require('../models/announcement').deleteMany({ group: id }); // Cascade delete
         res.json({ message: 'Group deleted successfully' });
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getGroupMessages = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const messages = await require('../models/message')
+            .find({ groupId: id }) // Note: Ensure frontend sends plain ID, not 'group_ID'
+            .populate('sender', 'name profilePic role')
+            .sort({ createdAt: 1 }); // Oldest first for chat history
+        res.json(messages);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.voteAnnouncement = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId, optionIndex } = req.body;
+
+        const announcement = await Announcement.findById(id);
+        if (!announcement || !announcement.poll) {
+            return res.status(404).json({ error: "Poll not found" });
+        }
+
+        // Check if user already voted
+        const existingVoteIndex = announcement.poll.userVotes.findIndex(v => v.userId.toString() === userId);
+
+        if (existingVoteIndex > -1) {
+            const oldOptionIndex = announcement.poll.userVotes[existingVoteIndex].optionIndex;
+
+            // Switch vote if different
+            if (oldOptionIndex !== optionIndex) {
+                announcement.poll.options[oldOptionIndex].votes = Math.max(0, announcement.poll.options[oldOptionIndex].votes - 1);
+                announcement.poll.options[optionIndex].votes += 1;
+                announcement.poll.userVotes[existingVoteIndex].optionIndex = optionIndex;
+            } else {
+                // Same vote, maybe toggle off? Or just ignore. Let's ignore.
+                return res.json(announcement);
+            }
+        } else {
+            // New Vote
+            announcement.poll.options[optionIndex].votes += 1;
+            announcement.poll.userVotes.push({ userId, optionIndex });
+        }
+
+        await announcement.save();
+
+        // Broadcast Update
+        try {
+            const io = require('../controllers/socketController').getIo();
+            // Emit to the specific group room
+            if (announcement.group) {
+                io.to(`group_${announcement.group.toString()}`).emit('updateAnnouncement', announcement);
+            } else {
+                io.emit('updateAnnouncement', announcement); // Global fallback
+            }
+        } catch (e) {
+            console.log("Socket emit error:", e.message);
+        }
+
+        res.json(announcement);
+    } catch (error) {
+        console.error("Vote Error:", error);
         res.status(500).json({ error: error.message });
     }
 };

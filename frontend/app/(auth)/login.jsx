@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { loginUser } from "../../src/controllers/authController";
+import { Colors, GlobalStyles } from "../../src/styles/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -30,71 +32,160 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}><Text style={styles.headerText}>Hike</Text></View>
-      <View style={styles.content}>
-        <Text style={styles.title}>Finance Community</Text>
+    <View style={GlobalStyles.container}>
+      {/* Curved Header */}
+      <View style={styles.header}>
+        <SafeAreaView>
+          <View style={{ alignItems: 'center', marginTop: 20 }}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="wallet-outline" size={40} color={Colors.accent} />
+            </View>
+            <Text style={styles.headerText}>FinanceChat</Text>
+            <Text style={styles.headerSubText}>Secure & Professional</Text>
+          </View>
+        </SafeAreaView>
+      </View>
 
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity
-            style={[styles.toggleBtn, selectedRole === 'user' && styles.toggleBtnActive]}
-            onPress={() => setSelectedRole('user')}
-          >
-            <Text style={[styles.toggleText, selectedRole === 'user' && styles.toggleTextActive]}>User Login</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleBtn, selectedRole === 'admin' && styles.toggleBtnActive]}
-            onPress={() => setSelectedRole('admin')}
-          >
-            <Text style={[styles.toggleText, selectedRole === 'admin' && styles.toggleTextActive]}>Admin Login</Text>
+      <View style={styles.contentContainer}>
+        <View style={styles.card}>
+          <Text style={styles.welcomeText}>Welcome Back</Text>
+
+          {/* Role Toggle */}
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={[styles.toggleBtn, selectedRole === 'user' && styles.toggleBtnActive]}
+              onPress={() => setSelectedRole('user')}
+            >
+              <Text style={[styles.toggleText, selectedRole === 'user' && styles.toggleTextActive]}>User</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleBtn, selectedRole === 'admin' && styles.toggleBtnActive]}
+              onPress={() => setSelectedRole('admin')}
+            >
+              <Text style={[styles.toggleText, selectedRole === 'admin' && styles.toggleTextActive]}>Admin</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ width: '100%' }}>
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              placeholder="name@example.com"
+              placeholderTextColor={Colors.textLight}
+              style={GlobalStyles.input}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              value={email}
+            />
+
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              placeholder="••••••••"
+              placeholderTextColor={Colors.textLight}
+              secureTextEntry
+              style={GlobalStyles.input}
+              onChangeText={setPassword}
+              value={password}
+            />
+
+            <TouchableOpacity style={[GlobalStyles.button, { marginTop: 10 }]} onPress={handleLoginPress}>
+              <Text style={GlobalStyles.buttonText}>Sign In</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity onPress={() => router.push("/(auth)/signUpScreen")} style={{ marginTop: 20 }}>
+            <Text style={{ color: Colors.textSecondary }}>Don't have an account? <Text style={{ color: Colors.secondary, fontWeight: 'bold' }}>Sign Up</Text></Text>
           </TouchableOpacity>
         </View>
-
-        <TextInput placeholder="Email" style={styles.input} onChangeText={setEmail} autoCapitalize="none" />
-        <TextInput placeholder="Password" secureTextEntry style={styles.input} onChangeText={setPassword} />
-        <TouchableOpacity style={styles.button} onPress={handleLoginPress}>
-          <Text style={styles.buttonText}>Login</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push("/(auth)/signUpScreen")}>
-          <Text style={styles.link}>New user? Sign Up</Text>
-        </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5F7FA" },
-  header: { backgroundColor: "#011f4b", height: 120, paddingHorizontal: 20, justifyContent: "center" },
-  headerText: { color: "#ffffff", fontSize: 36, fontWeight: 'bold' },
-  content: { flex: 1, padding: 20, justifyContent: "center" },
-  title: { fontSize: 26, fontWeight: "bold", textAlign: "center", marginBottom: 30, color: '#011f4b' },
+  header: {
+    backgroundColor: Colors.primary,
+    height: 300,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    alignItems: 'center',
+    width: '100%',
+    position: 'absolute',
+    top: 0,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)'
+  },
+  headerText: {
+    color: Colors.white,
+    fontSize: 28,
+    fontWeight: 'bold',
+    letterSpacing: 1
+  },
+  headerSubText: {
+    color: Colors.textLight,
+    fontSize: 14,
+    marginTop: 5
+  },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginTop: 100 // Overlap header
+  },
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 25,
+    alignItems: 'center',
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  welcomeText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: Colors.textPrimary,
+    marginBottom: 20
+  },
   toggleContainer: {
     flexDirection: 'row',
-    marginBottom: 30,
-    backgroundColor: '#e1e8ed',
-    borderRadius: 30,
+    marginBottom: 20,
+    backgroundColor: Colors.inputBg,
+    borderRadius: 15,
     padding: 4,
     width: '100%',
   },
   toggleBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 25
+    borderRadius: 12
   },
   toggleBtnActive: {
-    backgroundColor: '#005b96',
-    elevation: 2,
-    shadowColor: '#000',
+    backgroundColor: Colors.surface,
+    shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2
+    shadowRadius: 4,
+    elevation: 2,
   },
-  toggleText: { fontSize: 16, color: '#555', fontWeight: '500' },
-  toggleTextActive: { color: 'white', fontWeight: 'bold' },
-  input: { backgroundColor: "#fff", padding: 15, borderRadius: 10, marginBottom: 15, borderWidth: 1, borderColor: '#eee' },
-  button: { backgroundColor: "#005b96", padding: 15, borderRadius: 10, marginTop: 10, elevation: 3 },
-  buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold", fontSize: 18 },
-  link: { marginTop: 20, textAlign: "center", color: "#005b96", fontWeight: '600' }
+  toggleText: { fontSize: 14, color: Colors.textSecondary, fontWeight: '600' },
+  toggleTextActive: { color: Colors.textPrimary, fontWeight: 'bold' },
+  label: {
+    alignSelf: 'flex-start',
+    color: Colors.textPrimary,
+    marginBottom: 6,
+    fontWeight: '500',
+    marginLeft: 4
+  }
 });

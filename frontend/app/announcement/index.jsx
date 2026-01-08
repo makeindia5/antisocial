@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, Button } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, Image } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE } from '../../src/services/apiService';
+import { Colors, GlobalStyles } from '../../src/styles/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function AnnouncementGroupsScreen() {
     const router = useRouter();
@@ -31,15 +33,10 @@ export default function AnnouncementGroupsScreen() {
 
     const fetchGroups = async () => {
         try {
-            console.log("Fetching groups...");
             const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/group/list`);
-            console.log("Fetch Groups Status:", res.status);
             if (res.ok) {
                 const data = await res.json();
-                console.log("Fetched Groups:", data.length);
                 setGroups(data);
-            } else {
-                console.log("Fetch Failed:", await res.text());
             }
         } catch (err) {
             console.error("Fetch Error:", err);
@@ -56,15 +53,11 @@ export default function AnnouncementGroupsScreen() {
     const createGroup = async () => {
         if (!name.trim()) return Alert.alert("Error", "Group name is required");
         try {
-            console.log("Creating group:", name, description);
-            console.log("URL:", `${API_BASE.replace('/auth', '/admin')}/group`);
-
             const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/group`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, description })
             });
-            console.log("Response status:", res.status);
 
             if (res.ok) {
                 setModalVisible(false);
@@ -74,7 +67,6 @@ export default function AnnouncementGroupsScreen() {
                 Alert.alert("Success", "Group created");
             } else {
                 const text = await res.text();
-                console.log("Response text:", text);
                 Alert.alert("Error", "Failed: " + text);
             }
         } catch (e) {
@@ -83,14 +75,23 @@ export default function AnnouncementGroupsScreen() {
         }
     };
 
+    const renderHeader = () => (
+        <View style={styles.header}>
+            <SafeAreaView>
+                <View style={styles.headerRow}>
+                    <TouchableOpacity onPress={() => router.back()}>
+                        <Ionicons name="arrow-back" size={28} color={Colors.white} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerText}>Announcement Groups</Text>
+                    <View style={{ width: 28 }} />
+                </View>
+            </SafeAreaView>
+        </View>
+    );
+
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 15 }}>
-                    <Ionicons name="arrow-back" size={28} color="white" />
-                </TouchableOpacity>
-                <Text style={styles.headerText}>Announcement Groups</Text>
-            </View>
+        <View style={GlobalStyles.container}>
+            {renderHeader()}
 
             <FlatList
                 data={groups}
@@ -100,24 +101,37 @@ export default function AnnouncementGroupsScreen() {
                 onRefresh={onRefresh}
                 renderItem={({ item }) => (
                     <TouchableOpacity
-                        activeOpacity={0.8}
+                        activeOpacity={0.9}
                         style={styles.cardContainer}
                         onPress={() => router.push(`/announcement/group/${item._id}`)}
                     >
                         <View style={styles.card}>
-                            <View style={[styles.iconContainer, { backgroundColor: '#4caf50' }]}>
-                                <Ionicons name="people" size={24} color="white" />
-                            </View>
+                            {item.icon ? (
+                                <Image source={{ uri: `${API_BASE.replace('/api/auth', '')}${item.icon}` }} style={styles.groupIcon} />
+                            ) : (
+                                <View style={[styles.iconContainer, { backgroundColor: '#e0f2fe' }]}>
+                                    <Ionicons name="people" size={24} color={Colors.secondary} />
+                                </View>
+                            )}
+
                             <View style={styles.textContainer}>
                                 <Text style={styles.title}>{item.name}</Text>
-                                <Text style={styles.content}>{item.description || 'No description'}</Text>
-                                <Text style={styles.date}>{item.members?.length || 0} members</Text>
+                                <Text style={styles.content} numberOfLines={2}>{item.description || 'No description available'}</Text>
+                                <View style={styles.metaContainer}>
+                                    <Ionicons name="person-outline" size={12} color={Colors.textLight} />
+                                    <Text style={styles.date}>{item.members?.length || 0} members</Text>
+                                </View>
                             </View>
-                            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                            <Ionicons name="chevron-forward" size={24} color={Colors.border} />
                         </View>
                     </TouchableOpacity>
                 )}
-                ListEmptyComponent={<Text style={styles.emptyText}>No groups found. Create one!</Text>}
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <Ionicons name="chatbubbles-outline" size={60} color={Colors.border} />
+                        <Text style={styles.emptyText}>No groups found. {isAdmin ? "Create one!" : "Check back later."}</Text>
+                    </View>
+                }
             />
 
             {isAdmin && (
@@ -126,15 +140,35 @@ export default function AnnouncementGroupsScreen() {
                 </TouchableOpacity>
             )}
 
-            <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-                <View style={styles.modalView}>
-                    <Text style={styles.modalTitle}>New Group</Text>
-                    <TextInput placeholder="Group Name" value={name} onChangeText={setName} style={styles.input} />
-                    <TextInput placeholder="Description" value={description} onChangeText={setDescription} style={styles.input} />
+            <Modal animationType="fade" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalView}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>New Group</Text>
+                            <TouchableOpacity onPress={() => setModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
 
-                    <View style={styles.modalButtons}>
-                        <Button title="Cancel" onPress={() => setModalVisible(false)} color="#666" />
-                        <Button title="Create" onPress={createGroup} color="#005b96" />
+                        <TextInput
+                            placeholder="Group Name"
+                            placeholderTextColor={Colors.textLight}
+                            value={name}
+                            onChangeText={setName}
+                            style={GlobalStyles.input}
+                        />
+                        <TextInput
+                            placeholder="Description"
+                            placeholderTextColor={Colors.textLight}
+                            value={description}
+                            onChangeText={setDescription}
+                            style={[GlobalStyles.input, { height: 80, textAlignVertical: 'top' }]}
+                            multiline
+                        />
+
+                        <TouchableOpacity style={GlobalStyles.button} onPress={createGroup}>
+                            <Text style={GlobalStyles.buttonText}>Create Group</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -143,33 +177,36 @@ export default function AnnouncementGroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f0f2f5' },
     header: {
-        backgroundColor: '#011f4b',
-        paddingHorizontal: 20,
-        paddingTop: 50,
-        paddingBottom: 25,
+        backgroundColor: Colors.primary,
+        paddingBottom: 20,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
+        paddingHorizontal: 20,
+        paddingTop: 10,
         elevation: 5,
-        marginBottom: 10,
-        flexDirection: 'row',
-        alignItems: 'center'
+        marginBottom: 10
     },
-    headerText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
-    listContent: { padding: 15 },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 10
+    },
+    headerText: { color: Colors.white, fontSize: 20, fontWeight: 'bold' },
+    listContent: { padding: 20, paddingBottom: 100 },
     cardContainer: { marginBottom: 15 },
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 15,
-        backgroundColor: 'white',
-        borderRadius: 12,
+        padding: 16,
+        backgroundColor: Colors.surface,
+        borderRadius: 16,
         elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4
+        shadowColor: Colors.shadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8
     },
     iconContainer: {
         width: 50,
@@ -179,10 +216,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginRight: 15
     },
+    groupIcon: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        marginRight: 15,
+        backgroundColor: Colors.inputBg
+    },
     textContainer: { flex: 1 },
-    title: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-    content: { fontSize: 14, color: '#666', marginTop: 2 },
-    date: { fontSize: 12, color: '#999', marginTop: 4 },
+    title: { fontSize: 16, fontWeight: 'bold', color: Colors.textPrimary },
+    content: { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
+    metaContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+    date: { fontSize: 12, color: Colors.textLight, marginLeft: 4 },
     fab: {
         position: 'absolute',
         bottom: 30,
@@ -190,14 +235,19 @@ const styles = StyleSheet.create({
         width: 60,
         height: 60,
         borderRadius: 30,
-        backgroundColor: '#005b96',
+        backgroundColor: Colors.secondary,
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 5
+        elevation: 5,
+        shadowColor: Colors.secondary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
     },
-    modalView: { margin: 20, marginTop: '50%', backgroundColor: 'white', borderRadius: 20, padding: 35, elevation: 5 },
-    modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15 },
-    input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, marginBottom: 15 },
-    modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
-    emptyText: { textAlign: 'center', marginTop: 50, color: '#999', fontStyle: 'italic' }
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+    modalView: { backgroundColor: 'white', borderRadius: 20, padding: 25, elevation: 5 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.textPrimary },
+    emptyContainer: { alignItems: 'center', marginTop: 50 },
+    emptyText: { marginTop: 10, color: Colors.textLight, fontSize: 16 }
 });

@@ -2,21 +2,36 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors, GlobalStyles } from '../../src/styles/theme';
 
 export default function SocialScreen() {
     const router = useRouter();
 
     return (
-        <View style={styles.container}>
-            <Ionicons name="share-social-outline" size={80} color="#005b96" />
-            <Text style={styles.text}>Social Media Integration Coming Soon!</Text>
-            <Text style={styles.subText}>Stay tuned for updates.</Text>
+        <View style={GlobalStyles.containerCenter}>
+            <View style={styles.iconCircle}>
+                <Ionicons name="share-social" size={60} color={Colors.secondary} />
+            </View>
+            <Text style={styles.text}>Social Media</Text>
+            <Text style={styles.subText}>Connect with your network shortly.</Text>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F7FA' },
-    text: { fontSize: 24, fontWeight: 'bold', color: '#011f4b', marginTop: 20, textAlign: 'center' },
-    subText: { fontSize: 16, color: 'gray', marginTop: 10 }
+    iconCircle: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: Colors.surface,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+        elevation: 10,
+        shadowColor: Colors.shadow,
+        shadowOpacity: 0.1,
+        shadowRadius: 10
+    },
+    text: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary, textAlign: 'center' },
+    subText: { fontSize: 16, color: Colors.textSecondary, marginTop: 10 }
 });
