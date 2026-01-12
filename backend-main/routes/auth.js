@@ -26,9 +26,13 @@ router.get('/gd/status', async (req, res) => {
 });
 
 router.get('/gd/messages', authController.getGDMessages);
+router.get('/gd/summary', authController.getGDSummary);
+router.get('/community/users', authController.getCommunityUsers);
 router.get('/messages/:user1/:user2', authController.getPrivateMessages);
 router.put('/vote', authController.votePoll);
 router.get('/counts', authController.getUnreadCounts); // Unread Counts Endpoint
 router.post('/meet/schedule', authController.scheduleMeeting);
 router.get('/meet/list', authController.getMeetings);
+router.post('/company/verify', authController.verifyCompanyID);
+router.post('/privacy/toggle', authController.toggleNumberPrivacy);
 module.exports = router;

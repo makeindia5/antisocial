@@ -14,6 +14,7 @@ export default function TabLayout() {
             tabBarActiveTintColor: theme.secondary,
             tabBarInactiveTintColor: theme.textSecondary || theme.textLight,
             tabBarStyle: {
+                display: 'none',
                 backgroundColor: theme.surface,
                 borderTopColor: theme.border,
                 height: Platform.OS === 'ios' ? 85 : 60,
@@ -33,7 +34,7 @@ export default function TabLayout() {
             <Tabs.Screen
                 name="communityScreen"
                 options={{
-                    title: 'Home',
+                    title: '',
                     tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />
                 }}
             />

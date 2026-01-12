@@ -85,13 +85,15 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: Colors.primary,
     textAlign: "center",
-    letterSpacing: 1
+    letterSpacing: 1,
+    lineHeight: 45,
+    marginBottom: 5
   },
   tagline: {
     fontSize: 16,
     color: Colors.textSecondary,
     textAlign: "center",
-    marginTop: 5,
+    marginTop: 10,
     letterSpacing: 0.5
   }
 });

@@ -8,6 +8,13 @@ export const loginUser = async (email, password) => {
   await AsyncStorage.setItem("userRole", data.role);
   if (data.name) await AsyncStorage.setItem("userName", data.name);
   if (data.profilePic) await AsyncStorage.setItem("profilePic", data.profilePic);
+  if (data.phoneNumber) await AsyncStorage.setItem("phoneNumber", data.phoneNumber);
+  await AsyncStorage.setItem("isNumberHidden", data.isNumberHidden ? 'true' : 'false');
+  if (data.hasCompanyAccess) {
+    await AsyncStorage.setItem("hasCompanyAccess", "true");
+  } else {
+    await AsyncStorage.removeItem("hasCompanyAccess");
+  }
   return data;
 };
 

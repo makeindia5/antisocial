@@ -164,12 +164,9 @@ exports.updateGDStatus = async (req, res) => {
         }
 
         status.isActive = isActive;
-        if (isActive && durationMinutes) {
-            status.durationMinutes = durationMinutes;
-            status.endTime = new Date(Date.now() + durationMinutes * 60000);
-        } else if (!isActive) {
-            status.endTime = null;
-        }
+        // User requested removal of timer, so we clear endTime and duration
+        status.endTime = null;
+        status.durationMinutes = 0;
 
         await status.save();
 
@@ -374,5 +371,34 @@ exports.voteAnnouncement = async (req, res) => {
     } catch (error) {
         console.error("Vote Error:", error);
         res.status(500).json({ error: error.message });
+    }
+};
+
+exports.createCompanyID = async (req, res) => {
+    try {
+        const { companyName } = req.body;
+        if (!companyName || companyName.length < 2) {
+            return res.status(400).json({ error: "Company name must be at least 2 characters" });
+        }
+
+        const Company = require('../models/Company');
+
+        // Generate ID
+        const prefix = companyName.substring(0, 2).toUpperCase();
+        const random = Math.floor(1000 + Math.random() * 9000); // 4 digits
+        const companyId = `${prefix}${random}`;
+
+        // Save
+        const newCompany = new Company({
+            companyName,
+            companyId
+        });
+        await newCompany.save();
+
+        res.json({ companyId });
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to create Company ID" });
     }
 };

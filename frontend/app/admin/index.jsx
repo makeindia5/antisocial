@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ScrollView, StyleSheet, Animated, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE } from '../../src/services/apiService';
 import { Colors } from '../../src/styles/theme';
@@ -37,8 +37,32 @@ export default function AdminDashboard() {
     const [createdCode, setCreatedCode] = useState(null);
     const [successModalVisible, setSuccessModalVisible] = useState(false);
 
+    // Company State
+    const [companyModalVisible, setCompanyModalVisible] = useState(false);
+    const [companyName, setCompanyName] = useState('');
+    const [generatedId, setGeneratedId] = useState('');
+
+    const handleCreateCompanyId = async () => {
+        if (!companyName.trim()) { Alert.alert("Error", "Enter Company Name"); return; }
+        try {
+            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/company/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ companyName })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setGeneratedId(data.companyId);
+            } else {
+                Alert.alert("Error", data.error);
+            }
+        } catch (e) { Alert.alert("Error", "Failed"); }
+    };
+
     const handleLogout = async () => {
-        await AsyncStorage.clear();
+        // Remove only session data, PRESERVE biometrics and theme
+        const keysToRemove = ['token', 'userId', 'userName', 'userRole', 'profilePic'];
+        await AsyncStorage.multiRemove(keysToRemove);
         router.replace('/(auth)/login');
     };
 
@@ -133,27 +157,8 @@ export default function AdminDashboard() {
     });
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerText}>Admin Dashboard</Text>
-                <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.menuBtn}>
-                    <Ionicons name="ellipsis-vertical" size={24} color={theme.white} />
-                </TouchableOpacity>
-
-                {showMenu && (
-                    <View style={styles.dropdownMenu}>
-                        <TouchableOpacity onPress={() => { toggleTheme(); setShowMenu(false); }} style={styles.dropdownItem}>
-                            <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={theme.textPrimary} />
-                            <Text style={styles.dropdownText}>{isDark ? "Light Mode" : "Dark Mode"}</Text>
-                        </TouchableOpacity>
-                        <View style={styles.dropdownDivider} />
-                        <TouchableOpacity onPress={() => { handleLogout(); setShowMenu(false); }} style={styles.dropdownItem}>
-                            <Ionicons name="log-out-outline" size={20} color={theme.error} />
-                            <Text style={[styles.dropdownText, { color: theme.error }]}>Logout</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-            </View>
+        <View style={styles.container}>
+            {/* Header Removed for Embedding */}
 
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 {/* Actions Grid */}
@@ -181,6 +186,11 @@ export default function AdminDashboard() {
                         <TouchableOpacity style={styles.card} onPress={() => router.push('/gd')}>
                             <Ionicons name="people-outline" size={32} color={theme.secondary} />
                             <Text style={styles.cardText}>Group Discussion</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.card} onPress={() => { setGeneratedId(''); setCompanyName(''); setCompanyModalVisible(true); }}>
+                            <Ionicons name="id-card-outline" size={32} color={theme.secondary} />
+                            <Text style={styles.cardText}>Create ID</Text>
                         </TouchableOpacity>
                     </ScrollView>
                     {/* Custom Scroll Indicator */}
@@ -230,6 +240,47 @@ export default function AdminDashboard() {
                 />
             </ScrollView>
 
+
+            {/* Company ID Modal */}
+            <Modal animationType="slide" transparent={true} visible={companyModalVisible} onRequestClose={() => setCompanyModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.successView}>
+                        <Text style={styles.modalTitle}>{generatedId ? "Company ID Generated" : "Create Company ID"}</Text>
+
+                        {!generatedId ? (
+                            <>
+                                <TextInput
+                                    placeholder="Enter Company Name"
+                                    placeholderTextColor={theme.textLight}
+                                    style={[styles.input, { width: '100%' }]}
+                                    value={companyName}
+                                    onChangeText={setCompanyName}
+                                />
+                                <TouchableOpacity style={styles.fullWidthBtn} onPress={handleCreateCompanyId}>
+                                    <Text style={styles.btnText}>Generate</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <View style={styles.codeBox}>
+                                    <Text style={styles.codeTextDisplay}>{generatedId}</Text>
+                                    <TouchableOpacity onPress={() => { Clipboard.setStringAsync(generatedId); Alert.alert("Copied"); }}>
+                                        <Ionicons name="copy-outline" size={24} color={theme.secondary} />
+                                    </TouchableOpacity>
+                                </View>
+                                <TouchableOpacity style={[styles.actionBtn, { width: '100%' }]} onPress={() => setCompanyModalVisible(false)}>
+                                    <Text style={styles.btnText}>Done</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                        {!generatedId && (
+                            <TouchableOpacity style={styles.closeBtn} onPress={() => setCompanyModalVisible(false)}>
+                                <Text style={{ color: '#666' }}>Cancel</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            </Modal>
 
             {/* Meeting Management Modal */}
             <Modal animationType="slide" transparent={true} visible={meetModalVisible} onRequestClose={() => setMeetModalVisible(false)}>
@@ -326,7 +377,7 @@ export default function AdminDashboard() {
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 }
 

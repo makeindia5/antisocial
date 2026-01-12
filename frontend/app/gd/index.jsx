@@ -1,32 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Keyboard } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Keyboard, Modal, ScrollView } from 'react-native';
+// import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import io from 'socket.io-client';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, GlobalStyles } from '../../src/styles/theme'; // Assuming these paths are correct
-import { useTheme } from '../../src/context/ThemeContext'; // Assuming this path is correct
+import { Colors, GlobalStyles } from '../../src/styles/theme';
+import { useTheme } from '../../src/context/ThemeContext';
 
 const BACKEND_URL = "http://192.168.29.129:5000";
 
 export default function GroupDiscussionScreen() {
     const router = useRouter();
     const { colors } = useTheme();
-    const theme = colors || Colors; // Fallback to default Colors if context not ready
+    const theme = colors || Colors;
     const styles = getStyles(theme);
 
     const [isAdmin, setIsAdmin] = useState(false);
     const [userId, setUserId] = useState(null);
     const [isActive, setIsActive] = useState(false);
-    const [timer, setTimer] = useState(0); // in seconds
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState('');
-    const [durationInput, setDurationInput] = useState('10'); // Default 10 mins
     const [loading, setLoading] = useState(true);
 
+    // Summary States
+    const [summaryModalVisible, setSummaryModalVisible] = useState(false);
+    const [summaryText, setSummaryText] = useState('');
+    const [summaryLoading, setSummaryLoading] = useState(false);
+
+    // Member Info States
+    const [infoModalVisible, setInfoModalVisible] = useState(false);
+    const [allUsers, setAllUsers] = useState([]);
+
     const socket = useRef(null);
-    const timerRef = useRef(null);
     const flatListRef = useRef(null);
 
     useEffect(() => {
@@ -34,7 +40,6 @@ export default function GroupDiscussionScreen() {
             'keyboardDidShow',
             () => {
                 if (flatListRef.current) {
-                    // Small delay to ensure layout is done
                     setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
                 }
             }
@@ -45,6 +50,9 @@ export default function GroupDiscussionScreen() {
     }, []);
 
     useEffect(() => {
+        // Update Last Read on Entry
+        AsyncStorage.setItem('lastReadGD', new Date().toISOString());
+
         checkUserRole();
         fetchStatus();
         fetchHistory();
@@ -52,7 +60,8 @@ export default function GroupDiscussionScreen() {
 
         return () => {
             if (socket.current) socket.current.disconnect();
-            if (timerRef.current) clearInterval(timerRef.current);
+            // Update Last Read Timestamp on Exit
+            AsyncStorage.setItem('lastReadGD', new Date().toISOString());
         };
     }, []);
 
@@ -61,7 +70,6 @@ export default function GroupDiscussionScreen() {
             const storedUserId = await AsyncStorage.getItem("userId");
             setUserId(storedUserId);
             if (storedUserId) {
-                // Fetch Admin ID to compare
                 const res = await fetch(`${BACKEND_URL}/api/auth/admin-id`);
                 const data = await res.json();
                 if (data.adminId === storedUserId) {
@@ -97,6 +105,36 @@ export default function GroupDiscussionScreen() {
         }
     };
 
+    const fetchSummary = async () => {
+        setSummaryLoading(true);
+        setSummaryModalVisible(true);
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/auth/gd/summary`);
+            if (res.ok) {
+                const data = await res.json();
+                setSummaryText(data.summary);
+            } else {
+                setSummaryText("Failed to generate summary.");
+            }
+        } catch (e) {
+            setSummaryText("Error connecting to server.");
+        } finally {
+            setSummaryLoading(false);
+        }
+    };
+
+    const fetchUsers = async () => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/auth/community/users`);
+            if (res.ok) {
+                const data = await res.json();
+                setAllUsers(data);
+            }
+        } catch (e) {
+            console.error("Fetch users error", e);
+        }
+    };
+
     const setupSocket = () => {
         socket.current = io(BACKEND_URL);
 
@@ -116,51 +154,14 @@ export default function GroupDiscussionScreen() {
 
     const handleStatusUpdate = (status) => {
         setIsActive(status.isActive);
-        if (status.isActive && status.endTime) {
-            const end = new Date(status.endTime).getTime();
-            const now = Date.now();
-            const diff = Math.floor((end - now) / 1000);
-            if (diff > 0) {
-                setTimer(diff);
-                startTimerCountdown(end);
-            } else {
-                setTimer(0);
-                setIsActive(false); // expired
-            }
-        } else {
-            setTimer(0);
-            if (timerRef.current) clearInterval(timerRef.current);
-        }
-    };
-
-    const startTimerCountdown = (endTimeMs) => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        timerRef.current = setInterval(() => {
-            const now = Date.now();
-            const diff = Math.floor((endTimeMs - now) / 1000);
-            if (diff <= 0) {
-                setTimer(0);
-                setIsActive(false);
-                clearInterval(timerRef.current);
-            } else {
-                setTimer(diff);
-            }
-        }, 1000);
-    };
-
-    const formatTime = (seconds) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m}:${s < 10 ? '0' : ''}${s}`;
     };
 
     const handleStartGD = async () => {
-        if (!durationInput) return;
         try {
             await fetch(`${BACKEND_URL}/api/admin/gd/status`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isActive: true, durationMinutes: parseInt(durationInput) })
+                body: JSON.stringify({ isActive: true }) // No duration sent
             });
         } catch (e) {
             Alert.alert("Error", "Failed to start GD");
@@ -188,9 +189,6 @@ export default function GroupDiscussionScreen() {
             type: 'text'
         };
         socket.current.emit('sendMessage', msgData);
-        // Optimistic UI update could be added here, but waiting for server echo (receiveMessage) is safer for group sync
-        // For specific user experience, we can append it immediately if we want.
-        // setMessages(prev => [...prev, { ...msgData, createdAt: new Date() }]); 
         setText('');
     };
 
@@ -199,46 +197,43 @@ export default function GroupDiscussionScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, backgroundColor: styles.container.backgroundColor }}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={{ position: 'absolute', left: 20 }}>
-                    <Ionicons name="arrow-back" size={24} color={theme.white} />
-                </TouchableOpacity>
-                <Text style={styles.headerText}>Group Discussion</Text>
-                {isAdmin && isActive && (
-                    <TouchableOpacity onPress={handleStopGD} style={styles.btnStopHeader}>
-                        <Text style={styles.btnEndText}>End</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
+                {/* Back Button Removed */}
 
-            <View style={styles.statusContainer}>
-                {isActive ? (
-                    <View style={styles.timerBox}>
-                        <Ionicons name="time-outline" size={24} color="white" />
-                        <Text style={styles.timerText}>Time Left: {formatTime(timer)}</Text>
+
+                {/* Clickable Header for Info */}
+                <TouchableOpacity onPress={() => { setInfoModalVisible(true); fetchUsers(); }} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.headerText}>Group Discussion</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: isActive ? '#4caf50' : '#d32f2f' }]}>
+                        <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{isActive ? 'LIVE' : 'OFF'}</Text>
                     </View>
-                ) : (
-                    <Text style={styles.closedText}>Discussion is Closed</Text>
-                )}
+                </TouchableOpacity>
+
+                <View style={styles.headerActions}>
+                    {isAdmin && isActive && (
+                        <TouchableOpacity onPress={handleStopGD} style={styles.btnStopHeader}>
+                            <Text style={styles.btnEndText}>End</Text>
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={fetchSummary} style={styles.btnSummaryHeader}>
+                        <Ionicons name="newspaper-outline" size={24} color="white" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {isAdmin && !isActive && (
                 <View style={styles.adminPanel}>
-                    <Text style={styles.adminTitle}>Admin Controls</Text>
-                    <View style={styles.row}>
-                        <TextInput
-                            style={styles.input}
-                            value={durationInput}
-                            onChangeText={setDurationInput}
-                            keyboardType="numeric"
-                            placeholder="Min"
-                            placeholderTextColor={theme.textLight}
-                        />
-                        <TouchableOpacity style={styles.btnStart} onPress={handleStartGD}>
-                            <Text style={styles.btnText}>Start Discussion</Text>
-                        </TouchableOpacity>
-                    </View>
+                    <Text style={styles.adminTitle}>Start Discussion</Text>
+                    <TouchableOpacity style={styles.btnStart} onPress={handleStartGD}>
+                        <Text style={styles.btnText}>Open Discussion Now</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {!isActive && !isAdmin && (
+                <View style={styles.statusContainer}>
+                    <Text style={styles.closedText}>Discussion is Closed</Text>
                 </View>
             )}
 
@@ -256,14 +251,9 @@ export default function GroupDiscussionScreen() {
                     renderItem={({ item }) => {
                         const senderId = item.sender?._id || item.sender;
                         const isMe = senderId === userId;
-
-                        // Handle Admin Name
                         let senderName = item.sender?.name || 'User';
-                        if (item.sender?.role === 'admin') {
-                            senderName = 'Admin';
-                        }
+                        if (item.sender?.role === 'admin') senderName = 'Admin';
 
-                        // Handle Avatar URL
                         let avatarUri = null;
                         if (item.sender?.profilePic) {
                             let picPath = item.sender.profilePic.replace(/\\/g, '/');
@@ -276,22 +266,11 @@ export default function GroupDiscussionScreen() {
                         }
 
                         return (
-                            <View style={[
-                                styles.msgRow,
-                                isMe ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }
-                            ]}>
-                                {!isMe && (
-                                    <Avatar uri={avatarUri} name={senderName} styles={styles} />
-                                )}
-                                <View style={[
-                                    styles.msgBubble,
-                                    isMe ? styles.msgMe : styles.msgOther
-                                ]}>
+                            <View style={[styles.msgRow, isMe ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
+                                {!isMe && <Avatar uri={avatarUri} name={senderName} styles={styles} />}
+                                <View style={[styles.msgBubble, isMe ? styles.msgMe : styles.msgOther]}>
                                     {!isMe && (
-                                        <Text style={[
-                                            styles.senderName,
-                                            item.sender?.role === 'admin' ? { color: '#d32f2f' } : {}
-                                        ]}>
+                                        <Text style={[styles.senderName, item.sender?.role === 'admin' ? { color: '#d32f2f' } : {}]}>
                                             {senderName}
                                         </Text>
                                     )}
@@ -326,23 +305,73 @@ export default function GroupDiscussionScreen() {
                     </View>
                 )}
             </KeyboardAvoidingView>
-        </SafeAreaView>
+
+            {/* Application Summary Modal */}
+            <Modal animationType="slide" transparent={true} visible={summaryModalVisible} onRequestClose={() => setSummaryModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalView}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Discussion Summary</Text>
+                            <TouchableOpacity onPress={() => setSummaryModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={theme.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+                        {summaryLoading ? (
+                            <ActivityIndicator size="large" color={theme.secondary} style={{ marginVertical: 20 }} />
+                        ) : (
+                            <ScrollView style={{ maxHeight: 300 }}>
+                                <Text style={styles.summaryText}>{summaryText}</Text>
+                            </ScrollView>
+                        )}
+                        <TouchableOpacity onPress={() => setSummaryModalVisible(false)} style={[GlobalStyles.button, { marginTop: 20 }]}>
+                            <Text style={GlobalStyles.buttonText}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Member List Modal caused by header tap */}
+            <Modal animationType="slide" transparent={true} visible={infoModalVisible} onRequestClose={() => setInfoModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalView, { height: '60%' }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Community Members</Text>
+                            <TouchableOpacity onPress={() => setInfoModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={theme.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={allUsers}
+                            keyExtractor={(item) => item._id}
+                            renderItem={({ item }) => (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
+                                    {item.profilePic ? (
+                                        <Image source={{ uri: `${BACKEND_URL}${item.profilePic}` }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }} />
+                                    ) : (
+                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.inputBg, justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                                            <Text style={{ color: theme.textSecondary, fontWeight: 'bold' }}>{item.name ? item.name[0].toUpperCase() : '?'}</Text>
+                                        </View>
+                                    )}
+                                    <View>
+                                        <Text style={{ color: theme.textPrimary, fontWeight: 'bold' }}>{item.name}</Text>
+                                        <Text style={{ color: theme.textSecondary, fontSize: 12 }}>{item.role}</Text>
+                                    </View>
+                                </View>
+                            )}
+                            ListEmptyComponent={<ActivityIndicator size="small" color={theme.secondary} />}
+                        />
+                    </View>
+                </View>
+            </Modal>
+        </View>
     );
 }
 
 const Avatar = ({ uri, name, styles }) => {
     const [error, setError] = useState(false);
-
     if (uri && !error) {
-        return (
-            <Image
-                source={{ uri }}
-                style={styles.avatar}
-                onError={() => setError(true)}
-            />
-        );
+        return <Image source={{ uri }} style={styles.avatar} onError={() => setError(true)} />;
     }
-
     return (
         <View style={[styles.avatar, styles.avatarFallback]}>
             <Text style={styles.avatarText}>{name ? name[0].toUpperCase() : '?'}</Text>
@@ -357,16 +386,12 @@ function getStyles(theme) {
         headerText: { color: theme.white, fontSize: 20, fontWeight: 'bold' },
         center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
         statusContainer: { padding: 10, alignItems: 'center', backgroundColor: theme.inputBg },
-        timerBox: { flexDirection: 'row', backgroundColor: '#ef5350', padding: 10, borderRadius: 20, alignItems: 'center' }, // Keep hardcoded as per instruction
-        timerText: { color: theme.white, fontWeight: 'bold', marginLeft: 5 },
+        statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginLeft: 10 },
         closedText: { color: theme.primary, fontWeight: 'bold' },
-        adminPanel: { padding: 15, backgroundColor: theme.surface, margin: 10, borderRadius: 10, elevation: 3 },
+        adminPanel: { padding: 15, backgroundColor: theme.surface, margin: 10, borderRadius: 10, elevation: 3, alignItems: 'center' },
         adminTitle: { fontWeight: 'bold', marginBottom: 10, color: theme.textPrimary },
-        row: { flexDirection: 'row', alignItems: 'center' },
-        input: { borderWidth: 1, borderColor: theme.border, borderRadius: 5, padding: 8, width: 60, marginRight: 10, textAlign: 'center', color: theme.textPrimary },
-        btnStart: { backgroundColor: theme.secondary, padding: 10, borderRadius: 5, flex: 1, alignItems: 'center' },
-        btnStop: { backgroundColor: '#d32f2f', padding: 10, borderRadius: 5, width: '100%', alignItems: 'center' }, // Keep hardcoded as per instruction
-        btnText: { color: theme.white, fontWeight: 'bold' },
+        btnStart: { backgroundColor: theme.secondary, padding: 12, borderRadius: 25, width: '80%', alignItems: 'center' },
+        btnText: { color: theme.white, fontWeight: 'bold', fontSize: 16 },
         msgBubble: { padding: 10, borderRadius: 10, marginBottom: 10, maxWidth: '80%' },
         msgMe: { alignSelf: 'flex-end', backgroundColor: theme.secondary },
         msgOther: { alignSelf: 'flex-start', backgroundColor: theme.surface },
@@ -374,14 +399,20 @@ function getStyles(theme) {
         msgTextOther: { color: theme.textPrimary },
         inputContainer: { flexDirection: 'row', padding: 10, backgroundColor: theme.surface, alignItems: 'center' },
         msgInput: { flex: 1, backgroundColor: theme.inputBg, borderRadius: 20, padding: 10, marginRight: 10, color: theme.textPrimary },
-        btnStopHeader: { position: 'absolute', right: 20, backgroundColor: '#d32f2f', paddingVertical: 5, paddingHorizontal: 15, borderRadius: 20 }, // Keep hardcoded as per instruction
-        btnEndText: { color: theme.white, fontWeight: 'bold', fontSize: 12 },
+        headerActions: { position: 'absolute', right: 15, flexDirection: 'row', alignItems: 'center' },
+        btnSummaryHeader: { padding: 5, marginLeft: 10 },
+        btnStopHeader: { backgroundColor: '#d32f2f', paddingVertical: 5, paddingHorizontal: 15, borderRadius: 20 },
         msgRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10 },
         avatar: { width: 35, height: 35, borderRadius: 17.5, marginRight: 8, backgroundColor: theme.inputBg },
         avatarFallback: { justifyContent: 'center', alignItems: 'center', backgroundColor: theme.secondary },
         avatarText: { color: theme.white, fontWeight: 'bold', fontSize: 14 },
-        senderName: { fontSize: 10, color: '#e65100', fontWeight: 'bold', marginBottom: 2 }, // Keep hardcoded as per instruction
+        senderName: { fontSize: 10, color: '#e65100', fontWeight: 'bold', marginBottom: 2 },
         msgTime: { fontSize: 10, alignSelf: 'flex-end', marginTop: 4 },
-        closedInputBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, backgroundColor: theme.inputBg, borderTopWidth: 1, borderTopColor: theme.border }
+        closedInputBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, backgroundColor: theme.inputBg, borderTopWidth: 1, borderTopColor: theme.border },
+        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+        modalView: { backgroundColor: theme.surface, borderRadius: 20, padding: 25, elevation: 5 },
+        modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+        modalTitle: { fontSize: 20, fontWeight: 'bold', color: theme.textPrimary },
+        summaryText: { fontSize: 14, color: theme.textSecondary, lineHeight: 20 }
     });
 }

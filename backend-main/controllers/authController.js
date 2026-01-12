@@ -8,7 +8,7 @@ const signup = async (req, res) => {
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: "User exists" });
     const hashedPassword = await bcrypt.hash(password, 10);
-    user = new User({ name, email, password: hashedPassword });
+    user = new User({ name, email, password: hashedPassword, phoneNumber: req.body.phoneNumber || '' });
     await user.save();
     res.json({ success: true, userId: user._id });
   } catch (err) {
@@ -31,19 +31,22 @@ const getGDMessages = async (req, res) => {
 
 const login = async (req, res) => {
   const { email, password } = req.body;
+  console.log("Login Attempt:", email);
   try {
     const user = await User.findOne({ email });
     if (!user) {
+      console.log("User not found for email:", email);
       return res.status(400).json({ message: "Invalid credentials" });
     }
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      console.log("Password mismatch for user:", email);
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || "supersecretjwtkey", { expiresIn: "1h" });
 
-    res.json({ token, userId: user._id, role: user.role, name: user.name, email: user.email, profilePic: user.profilePic });
+    res.json({ token, userId: user._id, role: user.role, name: user.name, email: user.email, profilePic: user.profilePic, hasCompanyAccess: user.hasCompanyAccess, phoneNumber: user.phoneNumber, isNumberHidden: user.isNumberHidden });
 
 
   } catch (err) {
@@ -216,6 +219,96 @@ const uploadAvatar = async (req, res) => {
   }
 };
 
+// Basic heuristic summary
+const getGDSummary = async (req, res) => {
+  try {
+    const Message = require('../models/message');
+    // Fetch last 50 messages
+    const messages = await Message.find({ groupId: 'finance-gd' })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate('sender', 'name');
+
+    if (messages.length === 0) return res.json({ summary: "No discussion history available to summarize." });
+
+    // Simple heuristic: Join last 10 messages for context, or filter by length
+    // Reversing to show chronological order
+    const chronological = messages.reverse();
+
+    let summaryText = "Here is a quick summary of the recent discussion:\n\n";
+
+    // 1. Highlight participants
+    const participants = [...new Set(chronological.map(m => m.sender?.name || 'Unknown'))];
+    if (participants.length > 0) {
+      summaryText += `**Participants:** ${participants.join(', ')}\n\n`;
+    }
+
+    // 2. "Key Points" (heuristic: messages with '?' or > 50 chars)
+    const keyPoints = chronological.filter(m => m.content.includes('?') || m.content.length > 40);
+
+    if (keyPoints.length > 0) {
+      summaryText += "**Key Points/Questions:**\n";
+      keyPoints.forEach(m => {
+        summaryText += `- ${m.sender?.name}: ${m.content.substring(0, 100)}${m.content.length > 100 ? '...' : ''}\n`;
+      });
+      summaryText += "\n";
+    }
+
+    // 3. Last few messages verbatim for context
+    summaryText += "**Recent Context:**\n";
+    chronological.slice(-5).forEach(m => {
+      summaryText += `[${new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}] ${m.sender?.name}: ${m.content}\n`;
+    });
+
+    res.json({ summary: summaryText });
+
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+const getCommunityUsers = async (req, res) => {
+  try {
+    const users = await User.find({}, 'name email profilePic role').sort({ name: 1 });
+    res.json(users);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+const verifyCompanyID = async (req, res) => {
+  try {
+    const { userId, companyId } = req.body;
+    const Company = require('../models/Company');
+
+    const company = await Company.findOne({ companyId });
+    if (!company) {
+      return res.status(404).json({ error: "Invalid Company ID" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    user.hasCompanyAccess = true;
+    await user.save();
+
+    res.json({ success: true, message: "Company Access Granted" });
+
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+const toggleNumberPrivacy = async (req, res) => {
+  const { userId, isHidden } = req.body;
+  try {
+    const user = await User.findByIdAndUpdate(userId, { isNumberHidden: isHidden }, { new: true });
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ success: true, isNumberHidden: user.isNumberHidden });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update privacy" });
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -225,5 +318,9 @@ module.exports = {
   getUnreadCounts,
   scheduleMeeting,
   getMeetings,
-  uploadAvatar
+  uploadAvatar,
+  getGDSummary,
+  getCommunityUsers,
+  verifyCompanyID,
+  toggleNumberPrivacy
 };

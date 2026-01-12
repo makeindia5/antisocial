@@ -60,6 +60,7 @@ export default function GroupFeedScreen() {
     const [userId, setUserId] = useState(null);
     const socket = useRef(null);
     const flatListRef = useRef(null);
+    const lastFeedLength = useRef(0);
 
     // Chat State
     const [messageText, setMessageText] = useState('');
@@ -162,6 +163,9 @@ export default function GroupFeedScreen() {
         });
 
         return () => {
+            // Update Last Read for this specific group
+            AsyncStorage.setItem(`lastReadGroup_${groupId}`, new Date().toISOString());
+
             if (socket.current) {
                 socket.current.emit('leaveGroup', groupId);
                 socket.current.disconnect();
@@ -169,9 +173,18 @@ export default function GroupFeedScreen() {
         };
     }, [groupId]);
 
+    // Update on mount as well
+    useEffect(() => {
+        if (groupId) AsyncStorage.setItem(`lastReadGroup_${groupId}`, new Date().toISOString());
+    }, [groupId]);
+
     useEffect(() => {
         setFeedData(processFeed(originalFeed));
-        setTimeout(scrollToBottom, 200);
+        // Only scroll if new messages arrived
+        if (originalFeed.length > lastFeedLength.current) {
+            setTimeout(scrollToBottom, 200);
+            lastFeedLength.current = originalFeed.length;
+        }
     }, [originalFeed]);
 
     const scrollToBottom = () => {
@@ -575,8 +588,6 @@ export default function GroupFeedScreen() {
 
         const showContent = item.content && item.content !== item.fileName;
         const timeColor = (isMedia && !showContent && !hasPoll && !item.title) ? theme.white : (isMe ? theme.white : theme.textSecondary);
-        // Note: isMe bubble is theme.secondary (Blue), text is White. Time should be White.
-        // !isMe bubble is theme.white (Light) / theme.surface (Dark). Text is Black / White. Time should be Grey.
 
         const timeContainerStyle = (isMedia && !showContent && !hasPoll && !item.title)
             ? { position: 'absolute', bottom: 5, right: 10, backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 }
@@ -658,7 +669,7 @@ export default function GroupFeedScreen() {
 
                     {hasDoc && (
                         <View style={{ padding: isMedia ? 5 : 0 }}>
-                            <TouchableOpacity style={styles.docBox} onPress={() => Linking.openURL(`${BACKEND_URL}${item.fileUrl}`)}>
+                            <View style={styles.docBox}>
                                 <View style={{ backgroundColor: 'rgba(211, 47, 47, 0.1)', padding: 8, borderRadius: 5 }}>
                                     <Ionicons name="document-text" size={30} color={theme.error || '#d32f2f'} />
                                 </View>
@@ -666,14 +677,29 @@ export default function GroupFeedScreen() {
                                     <Text numberOfLines={1} style={[styles.docText, { color: theme.textPrimary }]}>{item.fileName || 'Document'}</Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                                         <Text style={{ fontSize: 10, color: theme.textSecondary }}>
-                                            {item.fileName?.split('.').pop().toUpperCase() || 'FILE'} • Tap to View
+                                            {item.fileName?.split('.').pop().toUpperCase() || 'FILE'}
                                         </Text>
                                     </View>
                                 </View>
-                                <View style={{ padding: 5 }}>
-                                    <Ionicons name="download-outline" size={24} color={theme.textSecondary} />
-                                </View>
-                            </TouchableOpacity>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', marginTop: 10, justifyContent: 'flex-end', gap: 10 }}>
+                                <TouchableOpacity
+                                    onPress={() => Linking.openURL(`${BACKEND_URL}${item.fileUrl}`)}
+                                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15, borderWidth: 1, borderColor: theme.border }}
+                                >
+                                    <Ionicons name="eye-outline" size={16} color={theme.textPrimary} />
+                                    <Text style={{ marginLeft: 6, fontSize: 12, color: theme.textPrimary }}>Open</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    onPress={() => Linking.openURL(`${BACKEND_URL}${item.fileUrl}`)}
+                                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 }}
+                                >
+                                    <Ionicons name="download-outline" size={16} color={theme.white} />
+                                    <Text style={{ marginLeft: 6, fontSize: 12, color: theme.white }}>Save</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
 
@@ -768,8 +794,6 @@ export default function GroupFeedScreen() {
                 renderItem={renderItem}
                 contentContainerStyle={{ padding: 10, paddingBottom: 20 }}
                 ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 50, color: '#999' }}>No messages yet</Text>}
-                onContentSizeChange={scrollToBottom}
-                onLayout={scrollToBottom}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />
                 }
@@ -1036,7 +1060,7 @@ export default function GroupFeedScreen() {
                     </ScrollView>
                 </View>
             </Modal>
-        </KeyboardAvoidingView >
+        </KeyboardAvoidingView>
     );
 }
 

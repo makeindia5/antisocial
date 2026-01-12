@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE } from '../../src/services/apiService';
 import { Colors, GlobalStyles } from '../../src/styles/theme';
 import { useTheme } from '../../src/context/ThemeContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function AnnouncementGroupsScreen() {
     const { colors } = useTheme();
@@ -16,6 +16,7 @@ export default function AnnouncementGroupsScreen() {
     const router = useRouter();
     const [groups, setGroups] = useState([]);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [unreadCounts, setUnreadCounts] = useState({});
 
     // Group Creation
     const [modalVisible, setModalVisible] = useState(false);
@@ -30,6 +31,15 @@ export default function AnnouncementGroupsScreen() {
             fetchGroups();
         }, [])
     );
+
+    useEffect(() => {
+        // Update Last Read on Entry
+        AsyncStorage.setItem('lastReadAnnounce', new Date().toISOString());
+
+        return () => {
+            AsyncStorage.setItem('lastReadAnnounce', new Date().toISOString());
+        };
+    }, []);
 
     const checkRole = async () => {
         const role = await AsyncStorage.getItem('userRole');
@@ -50,12 +60,42 @@ export default function AnnouncementGroupsScreen() {
                     (g.members && g.members.some(m => (m._id === currentUserId || m === currentUserId)))
                 );
                 setGroups(filtered);
+                fetchUnreadCounts(filtered);
             }
         } catch (err) {
             console.error("Fetch Error:", err);
         } finally {
             setRefreshing(false);
         }
+    };
+
+    const fetchUnreadCounts = async (groupsList) => {
+        const counts = {};
+        await Promise.all(groupsList.map(async (group) => {
+            try {
+                const lastRead = await AsyncStorage.getItem(`lastReadGroup_${group._id}`);
+                const lastReadDate = lastRead ? new Date(lastRead) : new Date(0);
+
+                // Fetch Announcements & Messages for this group to count
+                const [resAnn, resChat] = await Promise.all([
+                    fetch(`${API_BASE.replace('/auth', '/admin')}/group/${group._id}/announcements`),
+                    fetch(`${API_BASE.replace('/auth', '/admin')}/group/${group._id}/messages`)
+                ]);
+
+                const anns = resAnn.ok ? await resAnn.json() : [];
+                const msgs = resChat.ok ? await resChat.json() : [];
+
+                let count = 0;
+                [...anns, ...msgs].forEach(item => {
+                    if (new Date(item.createdAt) > lastReadDate) count++;
+                });
+
+                counts[group._id] = count;
+            } catch (e) {
+                console.warn("Failed to count for group", group._id);
+            }
+        }));
+        setUnreadCounts(counts);
     };
 
     const onRefresh = () => {
@@ -89,16 +129,10 @@ export default function AnnouncementGroupsScreen() {
     };
 
     const renderHeader = () => (
-        <View style={styles.header}>
-            <SafeAreaView>
-                <View style={styles.headerRow}>
-                    <TouchableOpacity onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={28} color={theme.white} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerText}>Announcement Groups</Text>
-                    <View style={{ width: 28 }} />
-                </View>
-            </SafeAreaView>
+        <View style={[styles.header, { paddingTop: 10, paddingBottom: 15 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={styles.headerText}>Announcement Groups</Text>
+            </View>
         </View>
     );
 
@@ -128,7 +162,14 @@ export default function AnnouncementGroupsScreen() {
                             )}
 
                             <View style={styles.textContainer}>
-                                <Text style={styles.title}>{item.name}</Text>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Text style={styles.title}>{item.name}</Text>
+                                    {unreadCounts[item._id] > 0 && (
+                                        <View style={styles.badge}>
+                                            <Text style={styles.badgeText}>{unreadCounts[item._id]}</Text>
+                                        </View>
+                                    )}
+                                </View>
                                 <Text style={styles.content} numberOfLines={2}>{item.description || 'No description available'}</Text>
                                 <View style={styles.metaContainer}>
                                     <Ionicons name="person-outline" size={12} color={theme.textLight} />
@@ -257,6 +298,21 @@ function getStyles(Colors) {
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.3,
             shadowRadius: 8,
+        },
+        badge: {
+            backgroundColor: Colors.error || 'red',
+            borderRadius: 10,
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            minWidth: 22,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 5
+        },
+        badgeText: {
+            color: 'white',
+            fontSize: 11,
+            fontWeight: 'bold'
         },
         modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
         modalView: { backgroundColor: Colors.surface, borderRadius: 20, padding: 25, elevation: 5 },

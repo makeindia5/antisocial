@@ -43,6 +43,13 @@ export default function LoginScreen() {
         return;
       }
 
+      // Check if already enrolled
+      const savedEmail = await AsyncStorage.getItem('biometric_email');
+      if (savedEmail === email) {
+        redirectUser(user);
+        return;
+      }
+
       // Ask for Biometrics if supported
       const compatible = await LocalAuthentication.hasHardwareAsync();
       if (compatible) {
@@ -95,7 +102,7 @@ export default function LoginScreen() {
       {/* Curved Header */}
       <View style={styles.header}>
         <SafeAreaView>
-          <View style={{ alignItems: 'center', marginTop: 20 }}>
+          <View style={{ alignItems: 'center', marginTop: 10 }}>
             <View style={styles.logoContainer}>
               <Image
                 source={require("../../assets/hike_logo.jpg")}
@@ -209,18 +216,20 @@ function getStyles(theme) {
       color: theme.white,
       fontSize: 28,
       fontWeight: 'bold',
-      letterSpacing: 1
+      letterSpacing: 1,
+      lineHeight: 40,
+      marginBottom: 5
     },
     headerSubText: {
       color: theme.textLight,
       fontSize: 14,
-      marginTop: 5
+      marginTop: 8
     },
     contentContainer: {
       flex: 1,
       justifyContent: 'center',
       paddingHorizontal: 20,
-      marginTop: 100
+      marginTop: 130
     },
     card: {
       backgroundColor: theme.surface,

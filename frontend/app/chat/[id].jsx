@@ -16,7 +16,7 @@ export default function ChatScreen() {
     const theme = colors || Colors;
     const styles = getStyles(theme);
 
-    const { id } = useLocalSearchParams();
+    const { id, name } = useLocalSearchParams();
     const router = useRouter();
     const [myId, setMyId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -161,8 +161,8 @@ export default function ChatScreen() {
                     <Ionicons name="person-circle" size={45} color="#fff" />
                 </View>
                 <View style={styles.headerInfo}>
-                    <Text style={styles.headerTitle}>Admin Support</Text>
-                    <Text style={styles.headerStatus}>Always here to help</Text>
+                    <Text style={styles.headerTitle}>{name || "User"}</Text>
+                    <Text style={styles.headerStatus}>Online</Text>
                 </View>
                 <TouchableOpacity style={styles.callBtn}>
                     <Ionicons name="call" size={20} color="white" />

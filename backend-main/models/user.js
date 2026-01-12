@@ -22,6 +22,18 @@ const UserSchema = new mongoose.Schema({
     profilePic: {
         type: String,
         default: ''
+    },
+    hasCompanyAccess: {
+        type: Boolean,
+        default: false
+    },
+    isNumberHidden: {
+        type: Boolean,
+        default: false
+    },
+    phoneNumber: {
+        type: String,
+        default: ''
     }
 });
 
