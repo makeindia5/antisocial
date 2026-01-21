@@ -130,8 +130,13 @@ export default function AnnouncementGroupsScreen() {
 
     const renderHeader = () => (
         <View style={[styles.header, { paddingTop: 10, paddingBottom: 15 }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={styles.headerText}>Announcement Groups</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => router.back()} style={{ position: 'absolute', left: 0, zIndex: 10 }}>
+                    <Ionicons name="arrow-back" size={24} color="white" />
+                </TouchableOpacity>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.headerText}>Announcement Groups</Text>
+                </View>
             </View>
         </View>
     );
@@ -143,46 +148,42 @@ export default function AnnouncementGroupsScreen() {
             <FlatList
                 data={groups}
                 keyExtractor={(item) => item._id}
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={{ padding: 15 }}
                 refreshing={refreshing}
                 onRefresh={onRefresh}
                 renderItem={({ item }) => (
                     <TouchableOpacity
                         activeOpacity={0.9}
-                        style={styles.cardContainer}
+                        style={styles.card}
                         onPress={() => router.push(`/announcement/group/${item._id}`)}
                     >
-                        <View style={styles.card}>
+                        <View style={styles.iconContainer}>
                             {item.icon ? (
-                                <Image source={{ uri: `${API_BASE.replace('/api/auth', '')}${item.icon}` }} style={styles.groupIcon} />
+                                <Image source={{ uri: `${API_BASE.replace('/api/auth', '')}${item.icon}` }} style={{ width: 50, height: 50, borderRadius: 25 }} />
                             ) : (
-                                <View style={[styles.iconContainer, { backgroundColor: theme.inputBg }]}>
-                                    <Ionicons name="people" size={24} color={theme.secondary} />
-                                </View>
+                                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>
+                                    {item.name ? item.name[0].toUpperCase() : 'A'}
+                                </Text>
                             )}
-
-                            <View style={styles.textContainer}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={styles.title}>{item.name}</Text>
-                                    {unreadCounts[item._id] > 0 && (
-                                        <View style={styles.badge}>
-                                            <Text style={styles.badgeText}>{unreadCounts[item._id]}</Text>
-                                        </View>
-                                    )}
-                                </View>
-                                <Text style={styles.content} numberOfLines={2}>{item.description || 'No description available'}</Text>
-                                <View style={styles.metaContainer}>
-                                    <Ionicons name="person-outline" size={12} color={theme.textLight} />
-                                    <Text style={styles.date}>{item.members?.length || 0} members</Text>
-                                </View>
-                            </View>
-                            <Ionicons name="chevron-forward" size={24} color={theme.border} />
                         </View>
+
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Text style={styles.groupName}>{item.name}</Text>
+                                {unreadCounts[item._id] > 0 && (
+                                    <View style={styles.badge}>
+                                        <Text style={styles.badgeText}>{unreadCounts[item._id]}</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <Text style={styles.groupDesc} numberOfLines={1}>{item.description}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
                     </TouchableOpacity>
                 )}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Ionicons name="chatbubbles-outline" size={60} color={theme.border} />
+                        <Ionicons name="chatbubbles-outline" size={60} color={theme.textLight} />
                         <Text style={styles.emptyText}>No groups found. {isAdmin ? "Create one!" : "Check back later."}</Text>
                     </View>
                 }
@@ -230,95 +231,48 @@ export default function AnnouncementGroupsScreen() {
     );
 }
 
-function getStyles(Colors) {
-    return StyleSheet.create({
-        header: {
-            backgroundColor: Colors.primary,
-            paddingBottom: 20,
-            borderBottomLeftRadius: 30,
-            borderBottomRightRadius: 30,
-            paddingHorizontal: 20,
-            paddingTop: 10,
-            elevation: 5,
-            marginBottom: 10
-        },
-        headerRow: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: 10
-        },
-        headerText: { color: Colors.white, fontSize: 20, fontWeight: 'bold' },
-        listContent: { padding: 20, paddingBottom: 100 },
-        cardContainer: { marginBottom: 15 },
-        card: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: 16,
-            backgroundColor: Colors.surface,
-            borderRadius: 16,
-            elevation: 3,
-            shadowColor: Colors.shadow,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.05,
-            shadowRadius: 8
-        },
-        iconContainer: {
-            width: 50,
-            height: 50,
-            borderRadius: 25,
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginRight: 15
-        },
-        groupIcon: {
-            width: 50,
-            height: 50,
-            borderRadius: 25,
-            marginRight: 15,
-            backgroundColor: Colors.inputBg
-        },
-        textContainer: { flex: 1 },
-        title: { fontSize: 16, fontWeight: 'bold', color: Colors.textPrimary },
-        content: { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
-        metaContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-        date: { fontSize: 12, color: Colors.textLight, marginLeft: 4 },
-        fab: {
-            position: 'absolute',
-            bottom: 30,
-            right: 30,
-            width: 60,
-            height: 60,
-            borderRadius: 30,
-            backgroundColor: Colors.secondary,
-            justifyContent: 'center',
-            alignItems: 'center',
-            elevation: 5,
-            shadowColor: Colors.secondary,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-        },
-        badge: {
-            backgroundColor: Colors.error || 'red',
-            borderRadius: 10,
-            paddingHorizontal: 8,
-            paddingVertical: 2,
-            minWidth: 22,
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginRight: 5
-        },
-        badgeText: {
-            color: 'white',
-            fontSize: 11,
-            fontWeight: 'bold'
-        },
-        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-        modalView: { backgroundColor: Colors.surface, borderRadius: 20, padding: 25, elevation: 5 },
-        modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-        modalTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.textPrimary },
-        emptyContainer: { alignItems: 'center', marginTop: 50 },
-        emptyText: { marginTop: 10, color: Colors.textLight, fontSize: 16 }
-    });
-}
+const getStyles = (theme) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background },
+    card: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.surface,
+        padding: 15,
+        borderRadius: 15,
+        marginBottom: 10,
+        elevation: 2
+    },
+    iconContainer: {
+        width: 50, height: 50, borderRadius: 25,
+        backgroundColor: theme.secondary,
+        justifyContent: 'center', alignItems: 'center',
+        marginRight: 15
+    },
+    groupName: { fontSize: 16, fontWeight: 'bold', color: theme.textPrimary },
+    groupDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+
+    badge: {
+        backgroundColor: '#d32f2f',
+        borderRadius: 10,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        marginLeft: 5
+    },
+    badgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
+
+    fab: {
+        position: 'absolute', bottom: 20, right: 20,
+        backgroundColor: theme.secondary,
+        width: 56, height: 56, borderRadius: 28,
+        justifyContent: 'center', alignItems: 'center',
+        elevation: 5
+    },
+
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+    modalView: { backgroundColor: theme.surface, padding: 25, borderRadius: 20 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: theme.textPrimary, textAlign: 'center' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    emptyContainer: { alignItems: 'center', marginTop: 50 },
+    emptyText: { marginTop: 10, color: theme.textSecondary }
+});

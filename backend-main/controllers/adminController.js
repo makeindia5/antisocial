@@ -376,7 +376,7 @@ exports.voteAnnouncement = async (req, res) => {
 
 exports.createCompanyID = async (req, res) => {
     try {
-        const { companyName } = req.body;
+        const { companyName, contactNumber, adminId } = req.body;
         if (!companyName || companyName.length < 2) {
             return res.status(400).json({ error: "Company name must be at least 2 characters" });
         }
@@ -391,7 +391,9 @@ exports.createCompanyID = async (req, res) => {
         // Save
         const newCompany = new Company({
             companyName,
-            companyId
+            contactNumber,
+            companyId,
+            createdBy: adminId
         });
         await newCompany.save();
 
@@ -400,5 +402,17 @@ exports.createCompanyID = async (req, res) => {
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: "Failed to create Company ID" });
+    }
+};
+
+exports.getCompanyHistory = async (req, res) => {
+    try {
+        const { adminId } = req.params;
+        const Company = require('../models/Company');
+        const history = await Company.find({ createdBy: adminId }).sort({ createdAt: -1 });
+        res.json(history);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to fetch history" });
     }
 };

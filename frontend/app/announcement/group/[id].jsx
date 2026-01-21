@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Video, ResizeMode } from 'expo-av';
-import ImageViewer from 'react-native-image-zoom-viewer';
+// import ImageViewer from 'react-native-image-zoom-viewer';
 import { API_BASE } from '../../../src/services/apiService';
 import { Colors, GlobalStyles } from '../../../src/styles/theme';
 import { useTheme } from '../../../src/context/ThemeContext';
@@ -72,8 +72,9 @@ export default function GroupFeedScreen() {
     const [viewerImage, setViewerImage] = useState(null);
 
     const openImageViewer = (url) => {
-        setViewerImage(url);
-        setViewerVisible(true);
+        // setViewerImage(url);
+        // setViewerVisible(true);
+        Alert.alert("View", "Image viewing temporarily disabled for build debugging");
     };
 
     const closeImageViewer = () => {
@@ -613,6 +614,11 @@ export default function GroupFeedScreen() {
 
                     {hasImage && (
                         <TouchableOpacity onPress={() => openImageViewer(`${BACKEND_URL}${item.fileUrl}`)}>
+                            {/* <Image
+                                source={{ uri: `${BACKEND_URL}${item.fileUrl}` }}
+                                style={[styles.inlineImage, { marginBottom: (showContent || item.title) ? 5 : 0 }]}
+                                resizeMode="cover"
+                            /> */}
                             <Image
                                 source={{ uri: `${BACKEND_URL}${item.fileUrl}` }}
                                 style={[styles.inlineImage, { marginBottom: (showContent || item.title) ? 5 : 0 }]}
@@ -760,7 +766,7 @@ export default function GroupFeedScreen() {
             <StatusBar style="light" backgroundColor={theme.primary} />
 
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+            <View style={[styles.header, { paddingTop: insets.top + 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                     <TouchableOpacity onPress={() => router.back()} style={{ paddingRight: 10 }}>
                         <Ionicons name="arrow-back" size={24} color="white" />
@@ -889,22 +895,18 @@ export default function GroupFeedScreen() {
             </Modal>
 
             {/* Full Screen Image Viewer Modal */}
-            <Modal visible={viewerVisible} transparent={true} animationType="fade" onRequestClose={closeImageViewer}>
+            {/* Full Screen Image Viewer Modal */}
+            {/* <Modal visible={viewerVisible} transparent={true} animationType="fade" onRequestClose={closeImageViewer}>
                 <View style={{ flex: 1, backgroundColor: 'black' }}>
                     <StatusBar style="light" />
                     <TouchableOpacity style={{ position: 'absolute', top: 40, right: 20, zIndex: 999 }} onPress={closeImageViewer}>
                         <Ionicons name="close-circle" size={40} color="white" />
                     </TouchableOpacity>
                     {viewerImage && (
-                        <ImageViewer
-                            imageUrls={[{ url: viewerImage }]}
-                            enableSwipeDown={true}
-                            onSwipeDown={closeImageViewer}
-                            renderIndicator={() => null}
-                        />
+                        <Text style={{color: 'white', alignSelf: 'center', marginTop: 100}}>Image Viewing Disabled</Text>
                     )}
                 </View>
-            </Modal>
+            </Modal> */}
 
             {/* Image Caption Modal */}
             <Modal visible={captionModalVisible} transparent animationType="slide">

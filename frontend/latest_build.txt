@@ -1,0 +1,21 @@
+
+Builds for @aayush_mali/gemini-finance-frontend:
+
+ID                       a5f4dd34-8fca-4331-b866-1d92fabd68a6
+Platform                 Android
+Status                   finished
+Profile                  production
+Distribution             store
+SDK Version              52.0.0
+Version                  1.0.0
+Version code             9
+Commit                   69aa84ed9439b5e0e36c9dd155c6d488e2ae9f91
+Logs                     https://expo.dev/accounts/aayush_mali/projects/gemini-finance-frontend/builds/a5f4dd34-8fca-4331-b866-1d92fabd68a6
+Application Archive URL  https://expo.dev/artifacts/eas/muAvnwnSX3Ye28KEJBkcTC.aab
+Build Artifacts URL      null
+Fingerprint              d99ce69c793ad00b79f3f40c9be695055ba8bd3b
+Started at               19/1/2026, 1:17:42 pm
+Finished at              19/1/2026, 1:22:48 pm
+Started by               aayush_mali
+[?25l[2K[1G[36m?[39m [1mLoad more builds?[22m [90m»[39m [90m(Y/n)[39m[2K[1G[2K[1G[32m√[39m [1mLoad more builds?[22m [90m...[39m no
+[?25h

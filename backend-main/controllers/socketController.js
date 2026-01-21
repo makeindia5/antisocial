@@ -12,12 +12,28 @@ exports.init = (server) => {
         }
     });
 
+    // Track online users: userId -> Set(socketIds)
+    const onlineUsers = new Map();
+
     io.on('connection', (socket) => {
         console.log('New client connected', socket.id);
 
         socket.on('join', (userId) => {
             socket.join(userId);
-            console.log(`User ${userId} joined room ${userId}`);
+            socket.userId = userId; // Store for disconnect
+
+            if (!onlineUsers.has(userId)) {
+                onlineUsers.set(userId, new Set());
+                io.emit('userOnline', userId); // Broadcast only if first connection
+            }
+            onlineUsers.get(userId).add(socket.id);
+
+            console.log(`User ${userId} joined room ${userId} (Online)`);
+        });
+
+        socket.on('checkOnlineStatus', (userId, callback) => {
+            const isOnline = onlineUsers.has(userId);
+            if (typeof callback === 'function') callback(isOnline);
         });
 
         socket.on('joinAnnouncement', (announcementId) => {
@@ -103,12 +119,30 @@ exports.init = (server) => {
         socket.on('markAsRead', async ({ msgId, userId }) => {
             try {
                 const message = await Message.findById(msgId);
-                // If it's already read, no need to update, but if sent/delivered -> read
-                if (message && message.status !== 'read') {
-                    message.status = 'read';
-                    message.read = true; // Sync legacy field
-                    await message.save();
-                    io.to(message.sender.toString()).emit('messageStatusUpdate', { msgId, status: 'read' });
+                if (!message) return;
+
+                if (message.groupId) {
+                    // Group Chat Read Logic
+                    const alreadyRead = message.readBy.some(r => r.user.toString() === userId);
+                    if (!alreadyRead) {
+                        message.readBy.push({ user: userId });
+                        await message.save();
+
+                        // Notify group (including sender) that this user read the message
+                        if (message.groupId === 'finance-gd') {
+                            io.to('finance-gd').emit('messageReadBy', { msgId, userId });
+                        } else {
+                            io.to(`group_${message.groupId}`).emit('messageReadBy', { msgId, userId });
+                        }
+                    }
+                } else {
+                    // 1:1 Chat Logic
+                    if (message.status !== 'read') {
+                        message.status = 'read';
+                        message.read = true;
+                        await message.save();
+                        io.to(message.sender.toString()).emit('messageStatusUpdate', { msgId, status: 'read' });
+                    }
                 }
             } catch (e) {
                 console.error("Mark Read Error:", e);
@@ -160,7 +194,16 @@ exports.init = (server) => {
         });
 
         socket.on('disconnect', () => {
-            console.log('Client disconnected');
+            console.log('Client disconnected', socket.id);
+            if (socket.userId && onlineUsers.has(socket.userId)) {
+                const userSockets = onlineUsers.get(socket.userId);
+                userSockets.delete(socket.id);
+                if (userSockets.size === 0) {
+                    onlineUsers.delete(socket.userId);
+                    io.emit('userOffline', socket.userId);
+                    console.log(`User ${socket.userId} went offline`);
+                }
+            }
         });
     });
 };

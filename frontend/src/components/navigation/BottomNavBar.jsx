@@ -6,10 +6,9 @@ import { Colors } from '../../styles/theme';
 const TABS = {
     personal: [
         { key: 'chats', label: 'Chats', icon: 'chatbubbles' },
-        { key: 'status', label: 'Status', icon: 'radio-button-on' }, // Placeholder for status
-        { key: 'groups', label: 'Groups', icon: 'people' },
-        { key: 'community', label: 'Community', icon: 'globe' },
-        { key: 'call', label: 'Call', icon: 'call' }
+        { key: 'status', label: 'Updates', icon: 'radio-button-on' },
+        { key: 'groups', label: 'Communities', icon: 'people' },
+        { key: 'calls', label: 'Calls', icon: 'call' }
     ],
     work: [
         { key: 'gd', label: 'GD', icon: 'people-circle' },

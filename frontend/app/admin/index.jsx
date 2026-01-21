@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ScrollView, StyleSheet, Animated, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-// import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE } from '../../src/services/apiService';
 import { Colors } from '../../src/styles/theme';
@@ -15,6 +15,7 @@ export default function AdminDashboard() {
     const { colors, toggleTheme, isDark } = useTheme();
     const theme = colors || Colors;
     const styles = getStyles(theme);
+    const insets = useSafeAreaInsets();
 
     const router = useRouter();
     const [users, setUsers] = useState([]);
@@ -40,23 +41,37 @@ export default function AdminDashboard() {
     // Company State
     const [companyModalVisible, setCompanyModalVisible] = useState(false);
     const [companyName, setCompanyName] = useState('');
+    const [contactNumber, setContactNumber] = useState('');
     const [generatedId, setGeneratedId] = useState('');
+    const [companyHistory, setCompanyHistory] = useState([]);
+    const [showHistory, setShowHistory] = useState(false);
 
     const handleCreateCompanyId = async () => {
         if (!companyName.trim()) { Alert.alert("Error", "Enter Company Name"); return; }
         try {
+            const adminId = await AsyncStorage.getItem('userId');
             const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/company/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ companyName })
+                body: JSON.stringify({ companyName, contactNumber, adminId })
             });
             const data = await res.json();
             if (res.ok) {
                 setGeneratedId(data.companyId);
+                fetchCompanyHistory(); // Refresh history
             } else {
                 Alert.alert("Error", data.error);
             }
         } catch (e) { Alert.alert("Error", "Failed"); }
+    };
+
+    const fetchCompanyHistory = async () => {
+        try {
+            const adminId = await AsyncStorage.getItem('userId');
+            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/company/history/${adminId}`);
+            const data = await res.json();
+            if (res.ok) setCompanyHistory(data);
+        } catch (e) { console.error(e); }
     };
 
     const handleLogout = async () => {
@@ -156,9 +171,20 @@ export default function AdminDashboard() {
         extrapolate: 'clamp'
     });
 
+    const renderHeader = () => (
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+            <View style={[styles.headerRow, { justifyContent: 'center', position: 'relative' }]}>
+                <TouchableOpacity onPress={() => router.back()} style={{ position: 'absolute', left: 0, zIndex: 10 }}>
+                    <Ionicons name="arrow-back" size={24} color="white" />
+                </TouchableOpacity>
+                <Text style={styles.headerText}>Admin Dashboard</Text>
+            </View>
+        </View>
+    );
+
     return (
         <View style={styles.container}>
-            {/* Header Removed for Embedding */}
+            {renderHeader()}
 
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 {/* Actions Grid */}
@@ -188,7 +214,15 @@ export default function AdminDashboard() {
                             <Text style={styles.cardText}>Group Discussion</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.card} onPress={() => { setGeneratedId(''); setCompanyName(''); setCompanyModalVisible(true); }}>
+                        <TouchableOpacity style={styles.card} onPress={() => {
+                            setGeneratedId('');
+                            setCompanyName('');
+                            setContactNumber('');
+                            setShowHistory(false);
+                            setCompanyHistory([]);
+                            fetchCompanyHistory(); // Pre-fetch
+                            setCompanyModalVisible(true);
+                        }}>
                             <Ionicons name="id-card-outline" size={32} color={theme.secondary} />
                             <Text style={styles.cardText}>Create ID</Text>
                         </TouchableOpacity>
@@ -244,10 +278,28 @@ export default function AdminDashboard() {
             {/* Company ID Modal */}
             <Modal animationType="slide" transparent={true} visible={companyModalVisible} onRequestClose={() => setCompanyModalVisible(false)}>
                 <View style={styles.modalOverlay}>
-                    <View style={styles.successView}>
-                        <Text style={styles.modalTitle}>{generatedId ? "Company ID Generated" : "Create Company ID"}</Text>
+                    <View style={[styles.successView, { maxHeight: '80%' }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                            <Text style={styles.modalTitle}>{generatedId ? "Company ID Generated" : showHistory ? "History" : "Create Company ID"}</Text>
+                            <TouchableOpacity onPress={() => setShowHistory(!showHistory)}>
+                                <Ionicons name={showHistory ? "create-outline" : "time-outline"} size={24} color={theme.primary} />
+                            </TouchableOpacity>
+                        </View>
 
-                        {!generatedId ? (
+                        {showHistory ? (
+                            <FlatList
+                                data={companyHistory}
+                                keyExtractor={(item) => item._id}
+                                style={{ width: '100%' }}
+                                renderItem={({ item }) => (
+                                    <View style={{ backgroundColor: theme.inputBg, padding: 10, borderRadius: 8, marginBottom: 10 }}>
+                                        <Text style={{ fontWeight: 'bold' }}>{item.companyName}</Text>
+                                        <Text style={{ fontSize: 12 }}>ID: {item.companyId}</Text>
+                                        <Text style={{ fontSize: 12, color: '#666' }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                                    </View>
+                                )}
+                            />
+                        ) : !generatedId ? (
                             <>
                                 <TextInput
                                     placeholder="Enter Company Name"
@@ -255,6 +307,14 @@ export default function AdminDashboard() {
                                     style={[styles.input, { width: '100%' }]}
                                     value={companyName}
                                     onChangeText={setCompanyName}
+                                />
+                                <TextInput
+                                    placeholder="Contact Number (Optional)"
+                                    placeholderTextColor={theme.textLight}
+                                    style={[styles.input, { width: '100%' }]}
+                                    value={contactNumber}
+                                    onChangeText={setContactNumber}
+                                    keyboardType="phone-pad"
                                 />
                                 <TouchableOpacity style={styles.fullWidthBtn} onPress={handleCreateCompanyId}>
                                     <Text style={styles.btnText}>Generate</Text>
@@ -385,30 +445,22 @@ const getStyles = (Colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
     header: {
         backgroundColor: Colors.primary,
-        padding: 20,
-        paddingTop: 30,
+        paddingBottom: 20,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        paddingHorizontal: 20,
+        paddingTop: 10,
+        elevation: 5,
+        marginBottom: 10
+    },
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        position: 'relative'
+        marginTop: 10
     },
-    headerText: { color: Colors.white, fontSize: 24, fontWeight: 'bold' },
-    menuBtn: { position: 'absolute', right: 20, top: 35, padding: 5 },
-    dropdownMenu: {
-        position: 'absolute',
-        top: 70,
-        right: 20,
-        backgroundColor: Colors.surface,
-        borderRadius: 10,
-        elevation: 10,
-        zIndex: 100,
-        minWidth: 150,
-        paddingVertical: 5,
-        shadowColor: Colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4
-    },
+    headerText: { color: Colors.white, fontSize: 20, fontWeight: 'bold' },
+
     dropdownItem: { flexDirection: 'row', alignItems: 'center', padding: 12 },
     dropdownText: { marginLeft: 10, fontSize: 16, color: Colors.textPrimary, fontWeight: '500' },
     dropdownDivider: { height: 1, backgroundColor: Colors.border, marginHorizontal: 10 },

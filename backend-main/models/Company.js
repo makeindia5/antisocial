@@ -5,6 +5,10 @@ const companySchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    contactNumber: {
+        type: String,
+        required: false
+    },
     companyId: {
         type: String,
         required: true,
@@ -13,6 +17,10 @@ const companySchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     }
 });
 

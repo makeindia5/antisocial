@@ -28,5 +28,6 @@ router.get('/group/:id/messages', adminController.getGroupMessages);
 router.delete('/group/:id', adminController.deleteGroup);
 router.post('/announcement/:id/vote', adminController.voteAnnouncement);
 router.post('/company/create', adminController.createCompanyID);
+router.get('/company/history/:adminId', adminController.getCompanyHistory);
 
 module.exports = router;

@@ -71,6 +71,31 @@ const getPrivateMessages = async (req, res) => {
   }
 };
 
+const getPrivateSummary = async (req, res) => {
+  try {
+    const { user1, user2 } = req.params;
+    const Message = require('../models/message');
+    const messages = await Message.find({
+      $or: [
+        { sender: user1, recipient: user2 },
+        { sender: user2, recipient: user1 }
+      ]
+    }).sort({ createdAt: -1 }).limit(50).populate('sender', 'name');
+
+    if (messages.length === 0) return res.json({ summary: "No conversation history." });
+
+    const chronological = messages.reverse();
+    let summaryText = "Summary of conversation:\n\n";
+    chronological.forEach(m => {
+      summaryText += `[${new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}] ${m.sender?.name}: ${m.content}\n`;
+    });
+
+    res.json({ summary: summaryText });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
 const votePoll = async (req, res) => {
   const { announcementId, userId } = req.body;
   const optionIndex = Number(req.body.optionIndex);
@@ -309,18 +334,97 @@ const toggleNumberPrivacy = async (req, res) => {
   }
 };
 
+const getUserDetails = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('-password');
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+
+
+const uploadFile = async (req, res) => {
+  try {
+    console.log("Upload File Request Received:", req.file ? req.file.filename : "No File");
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    res.json({ url: `/uploads/${req.file.filename}`, type: req.file.mimetype });
+  } catch (e) {
+    console.error("Upload File Error:", e);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+};
+
+const createStatus = async (req, res) => {
+  try {
+    const { userId, type, content, caption, color } = req.body;
+    const Status = require('../models/Status');
+
+    const newStatus = new Status({
+      user: userId,
+      type,
+      content,
+      caption,
+      color
+    });
+
+    await newStatus.save();
+    await newStatus.populate('user', 'name profilePic');
+
+    try {
+      const io = require('../controllers/socketController').getIo();
+      io.emit('newStatus', newStatus);
+    } catch (e) { console.error("Socket emit error:", e.message); }
+
+    res.status(201).json(newStatus);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+const getStatuses = async (req, res) => {
+  try {
+    const Status = require('../models/Status');
+    const statuses = await Status.find({ expiresAt: { $gt: new Date() } })
+      .populate('user', 'name profilePic')
+      .sort({ createdAt: -1 });
+    res.json(statuses);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+const deleteStatus = async (req, res) => {
+  try {
+    const { statusId } = req.params;
+    const Status = require('../models/Status');
+    await Status.findByIdAndDelete(statusId);
+    res.json({ message: 'Status deleted' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
 module.exports = {
   signup,
   login,
   getGDMessages,
   getPrivateMessages,
+  getPrivateSummary,
   votePoll,
   getUnreadCounts,
   scheduleMeeting,
   getMeetings,
   uploadAvatar,
+  uploadFile,
   getGDSummary,
   getCommunityUsers,
   verifyCompanyID,
-  toggleNumberPrivacy
+  toggleNumberPrivacy,
+  getUserDetails,
+  createStatus,
+  getStatuses,
+  deleteStatus
 };

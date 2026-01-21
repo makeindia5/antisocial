@@ -1,7 +1,23 @@
+# Node / Expo
 node_modules/
-.env
-.DS_Store
-dist/
-build/
 .expo/
+.env
+android/
+build/
+
+# Logs
 *.log
+err.txt
+out.txt
+
+# Uploads
+uploads/
+# *.jpg
+# *.png
+
+# Expo / EAS
+*.aab
+*.apk
+
+# Misc
+.DS_Store

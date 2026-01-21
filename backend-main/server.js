@@ -17,7 +17,7 @@ app.use(express.static("public"));
 app.use('/uploads', express.static('uploads'));
 
 app.use("/api/auth", require("./routes/auth"));
-app.use("/api/admin", require("./routes/admin"));
+// app.use("/api/admin", require("./routes/admin"));
 
 // Initialize Socket.io
 socketController.init(server);
