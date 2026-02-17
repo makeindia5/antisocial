@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, ActivityIndicator, Modal, FlatList, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, ActivityIndicator, Modal, FlatList, TextInput, RefreshControl, Switch } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../../../src/context/ThemeContext';
 import { Colors } from '../../../../src/styles/theme';
+
+import * as ImagePicker from 'expo-image-picker';
 
 const BACKEND_URL = "http://192.168.29.129:5000";
 
@@ -21,6 +23,8 @@ export default function GroupInfoScreen() {
     const [myId, setMyId] = useState(null);
     const [isEditingDesc, setIsEditingDesc] = useState(false);
     const [descText, setDescText] = useState('');
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editedName, setEditedName] = useState('');
     const [users, setUsers] = useState([]);
     const [addModalVisible, setAddModalVisible] = useState(false);
 
@@ -58,24 +62,40 @@ export default function GroupInfoScreen() {
 
     const updateDescription = async () => {
         try {
-            const res = await fetch(`${BACKEND_URL}/api/auth/chat/group/description/${id}`, {
-                method: 'POST',
+            const res = await fetch(`${BACKEND_URL}/api/auth/chat/group/settings/${id}`, {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ description: descText, requesterId: myId })
+                body: JSON.stringify({ description: descText })
             });
             const data = await res.json();
             if (data.success) {
                 setGroup({ ...group, description: descText });
                 setIsEditingDesc(false);
             } else {
-                Alert.alert("Error", data.error);
+                Alert.alert("Error", data.error || "Failed to update description");
+            }
+        } catch (e) { Alert.alert("Error", "Network error"); }
+    };
+
+    const exitGroup = async () => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/auth/chat/group/remove/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: myId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                router.replace('/(tabs)/communityScreen');
+            } else {
+                Alert.alert("Error", data.error || "Failed to leave group");
             }
         } catch (e) { Alert.alert("Error", "Network error"); }
     };
 
     const fetchUsers = async () => {
         try {
-            const res = await fetch(`${BACKEND_URL}/api/community/users`);
+            const res = await fetch(`${BACKEND_URL}/api/auth/community/users`);
             const data = await res.json();
             setUsers(data.filter(u => !group.members.some(m => m._id === u._id)));
         } catch (e) { console.error(e); }
@@ -150,8 +170,65 @@ export default function GroupInfoScreen() {
 
     const isAdmin = (userId) => {
         if (!group || !group.admins) return false;
-        // Admins might be populated objects or IDs.
-        return group.admins.some(admin => (typeof admin === 'object' ? admin._id : admin) === userId);
+        console.log("isAdmin Check - MyID:", userId, "Admins:", JSON.stringify(group.admins));
+        return group.admins.some(admin => String(typeof admin === 'object' ? admin._id : admin) === String(userId));
+    };
+
+    const pickImage = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.5,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                const asset = result.assets[0];
+                uploadIcon({
+                    uri: asset.uri,
+                    name: asset.fileName || 'group_icon.jpg',
+                    mimeType: 'image/jpeg' // Force mimeType for FormData stability
+                });
+            }
+        } catch (e) {
+            Alert.alert("Error", "Could not pick image");
+        }
+    };
+
+    const uploadIcon = async (fileData) => {
+        try {
+            const formData = new FormData();
+            formData.append('file', {
+                uri: fileData.uri,
+                name: fileData.name,
+                type: fileData.mimeType
+            });
+
+            const res = await fetch(`${BACKEND_URL}/api/auth/upload`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                const updateRes = await fetch(`${BACKEND_URL}/api/auth/chat/group/icon/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ icon: data.url })
+                });
+                if (updateRes.ok) {
+                    setGroup(prev => ({ ...prev, icon: data.url }));
+                    Alert.alert("Success", "Group icon updated!");
+                }
+            } else {
+                Alert.alert("Error", "Upload failed");
+            }
+        } catch (e) {
+            console.error(e);
+            Alert.alert("Error", "Failed to update icon");
+        }
     };
 
     if (loading) {
@@ -183,15 +260,68 @@ export default function GroupInfoScreen() {
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                 {/* Group Profile */}
                 <View style={styles.profileContainer}>
-                    <View style={styles.avatarLarge}>
-                        {group.type === 'announcement' ? (
-                            <Ionicons name="megaphone" size={60} color="white" />
-                        ) : (
-                            <Ionicons name="people" size={60} color="white" />
-                        )}
-                    </View>
-                    <Text style={styles.groupName}>{group.name}</Text>
-                    <Text style={styles.groupCount}>Group · {group.members.length} members</Text>
+                    <TouchableOpacity onPress={isAdmin(myId) ? pickImage : null} activeOpacity={0.8}>
+                        <View style={styles.avatarLarge}>
+                            {group.icon ? (
+                                <Image source={{ uri: `${BACKEND_URL}${group.icon}` }} style={{ width: 100, height: 100, borderRadius: 50 }} />
+                            ) : (
+                                group.type === 'announcement' ? (
+                                    <Ionicons name="megaphone" size={60} color="white" />
+                                ) : (
+                                    <Ionicons name="people" size={60} color="white" />
+                                )
+                            )}
+                            {isAdmin(myId) && (
+                                <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: theme.primary, borderRadius: 15, padding: 5, borderWidth: 2, borderColor: theme.surface }}>
+                                    <Ionicons name="camera" size={16} color="white" />
+                                </View>
+                            )}
+                        </View>
+                    </TouchableOpacity>
+                    {isEditingName ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                            <TextInput
+                                style={[styles.groupName, { borderBottomWidth: 1, borderColor: theme.textSecondary, paddingBottom: 2, minWidth: 150, textAlign: 'center' }]}
+                                value={editedName}
+                                onChangeText={setEditedName}
+                                autoFocus
+                            />
+                            <TouchableOpacity onPress={async () => {
+                                if (!editedName.trim()) return;
+                                try {
+                                    const res = await fetch(`${BACKEND_URL}/api/auth/chat/group/settings/${id}`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ name: editedName })
+                                    });
+                                    if (res.ok) {
+                                        setGroup(prev => ({ ...prev, name: editedName }));
+                                        setIsEditingName(false);
+                                        Alert.alert("Success", "Group name updated");
+                                    } else {
+                                        Alert.alert("Error", "Failed to update name");
+                                    }
+                                } catch (e) {
+                                    Alert.alert("Error", "Network error");
+                                }
+                            }} style={{ marginLeft: 10 }}>
+                                <Ionicons name="checkmark-circle" size={24} color={theme.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setIsEditingName(false)} style={{ marginLeft: 10 }}>
+                                <Ionicons name="close-circle" size={24} color="red" />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                            <Text style={[styles.groupName, { color: theme.textPrimary }]}>{group.name}</Text>
+                            {isAdmin(myId) && (
+                                <TouchableOpacity onPress={() => { setEditedName(group.name); setIsEditingName(true); }} style={{ marginLeft: 10 }}>
+                                    <Ionicons name="pencil" size={18} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
+                    <Text style={styles.groupCount}>Group</Text>
                 </View>
 
                 {/* Description */}
@@ -223,13 +353,55 @@ export default function GroupInfoScreen() {
                     )}
                 </View>
 
-                {/* Add Member (Available for Everyone) */}
-                <TouchableOpacity style={styles.actionRow} onPress={() => { fetchUsers(); setAddModalVisible(true); }}>
-                    <View style={[styles.iconCircle, { backgroundColor: theme.secondary }]}>
-                        <Ionicons name="person-add" size={20} color="white" />
+
+
+                {/* Group Settings (Admin Only) */}
+                {isAdmin(myId) && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Group Settings</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                            <View>
+                                <Text style={{ color: theme.textPrimary, fontSize: 16 }}>Send Messages</Text>
+                                <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+                                    {group.onlyAdminsCanPost ? "Only Admins" : "All Participants"}
+                                </Text>
+                            </View>
+                            <Switch
+                                value={group.onlyAdminsCanPost}
+                                onValueChange={async (newValue) => {
+                                    try {
+                                        setGroup({ ...group, onlyAdminsCanPost: newValue }); // Optimistic update
+                                        const res = await fetch(`${BACKEND_URL}/api/auth/chat/group/settings/${id}`, {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ onlyAdminsCanPost: newValue })
+                                        });
+                                        const data = await res.json();
+                                        if (!data.success) {
+                                            setGroup({ ...group, onlyAdminsCanPost: !newValue }); // Revert
+                                            Alert.alert("Error", "Failed to update settings");
+                                        }
+                                    } catch (e) {
+                                        setGroup({ ...group, onlyAdminsCanPost: !newValue });
+                                        Alert.alert("Error", "Network error");
+                                    }
+                                }}
+                                trackColor={{ false: "#767577", true: theme.primary }}
+                                thumbColor={group.onlyAdminsCanPost ? "#f4f3f4" : "#f4f3f4"}
+                            />
+                        </View>
                     </View>
-                    <Text style={styles.actionText}>Add Participants</Text>
-                </TouchableOpacity>
+                )}
+
+                {/* Add Member (Admin Only) */}
+                {isAdmin(myId) && (
+                    <TouchableOpacity style={styles.actionRow} onPress={() => { fetchUsers(); setAddModalVisible(true); }}>
+                        <View style={[styles.iconCircle, { backgroundColor: theme.secondary }]}>
+                            <Ionicons name="person-add" size={20} color="white" />
+                        </View>
+                        <Text style={styles.actionText}>Add Participants</Text>
+                    </TouchableOpacity>
+                )}
 
                 {/* Participants */}
                 <View style={styles.section}>
@@ -251,22 +423,31 @@ export default function GroupInfoScreen() {
                                         <Text style={styles.adminBadge}>Group Admin</Text>
                                     )}
                                 </View>
-                                <Text style={styles.memberStatus}>Available</Text>
                             </View>
                         </TouchableOpacity>
                     ))}
                 </View>
-
-                {/* Exit Group */}
-                <TouchableOpacity style={[styles.actionRow, { borderTopWidth: 1, borderTopColor: theme.border, marginTop: 20 }]} onPress={() => Alert.alert("Exit", "Exit Group logic here")}>
+                <TouchableOpacity style={[styles.actionRow, { borderTopWidth: 1, borderTopColor: theme.border, marginTop: 20 }]} onPress={() => {
+                    const isCommunity = group.type?.toLowerCase() === 'community';
+                    Alert.alert(
+                        isCommunity ? "Exit Community" : "Exit Group",
+                        `Are you sure you want to exit this ${isCommunity ? "community" : "group"}?`,
+                        [
+                            { text: "Cancel", style: "cancel" },
+                            { text: "Exit", style: "destructive", onPress: exitGroup }
+                        ]
+                    );
+                }}>
                     <Ionicons name="log-out-outline" size={24} color={theme.error} style={{ marginRight: 15 }} />
-                    <Text style={[styles.actionText, { color: theme.error }]}>Exit Group</Text>
+                    <Text style={[styles.actionText, { color: theme.error }]}>
+                        {group.type?.toLowerCase() === 'community' ? "Exit Community" : "Exit Group"}
+                    </Text>
                 </TouchableOpacity>
 
             </ScrollView>
 
             <Modal visible={addModalVisible} animationType="slide" onRequestClose={() => setAddModalVisible(false)}>
-                <SafeAreaView style={{ flex: 1, backgroundColor: theme.primary }}>
+                <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
                     <View style={styles.header}>
                         <TouchableOpacity onPress={() => setAddModalVisible(false)}><Ionicons name="close" size={24} color="white" /></TouchableOpacity>
                         <Text style={[styles.headerTitle, { marginLeft: 15 }]}>Add Participants</Text>
@@ -290,7 +471,7 @@ export default function GroupInfoScreen() {
                     />
                 </SafeAreaView>
             </Modal>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 

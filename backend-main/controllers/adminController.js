@@ -4,6 +4,8 @@ const GDStatus = require('../models/gdStatus');
 const AnnouncementGroup = require('../models/AnnouncementGroup');
 const crypto = require('crypto');
 
+const Meeting = require('../models/meeting');
+
 exports.createAnnouncement = async (req, res) => {
     try {
         console.log("Creating announcement with body:", req.body);
@@ -62,9 +64,65 @@ exports.createAnnouncement = async (req, res) => {
 
 exports.createMeet = async (req, res) => {
     try {
+        const { hostId } = req.body;
         const roomCode = crypto.randomBytes(3).toString('hex').toUpperCase();
-        // Determine backend URL (handled by client, client just needs code)
+
+        const meeting = new Meeting({
+            title: "Instant Meeting",
+            code: roomCode,
+            scheduledTime: new Date(),
+            hostId: hostId || null,
+            meetingType: 'instant',
+            isStarted: true // Instant meetings are started by definition
+        });
+        await meeting.save();
+
         res.json({ roomCode, url: `/meet.html?room=${roomCode}` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.scheduleMeet = async (req, res) => {
+    try {
+        const { title, scheduledTime, hostId } = req.body;
+        const code = crypto.randomBytes(3).toString('hex').toUpperCase();
+
+        const meeting = new Meeting({
+            title,
+            code,
+            scheduledTime,
+            hostId,
+            meetingType: 'scheduled'
+        });
+        await meeting.save();
+        res.json({ meeting });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getMeetings = async (req, res) => {
+    try {
+        const meetings = await Meeting.find({
+            meetingType: 'scheduled',
+            isEnded: false,
+            $or: [
+                { isStarted: true },
+                { scheduledTime: { $gt: new Date() } }
+            ]
+        }).sort({ scheduledTime: 1 });
+        res.json(meetings);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.deleteMeeting = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await Meeting.findByIdAndDelete(id);
+        res.json({ success: true, message: "Meeting cancelled" });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -226,11 +284,11 @@ exports.deleteMessage = async (req, res) => {
 exports.createGroup = async (req, res) => {
     try {
         console.log("createGroup called with:", req.body);
-        const { name, description } = req.body;
+        const { name, description, members } = req.body;
         const group = new AnnouncementGroup({
             name,
             description,
-            members: [], // Initially empty or passed in body?
+            members: members || [],
             createdBy: req.user ? req.user.userId : null
         });
         await group.save();

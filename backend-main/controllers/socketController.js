@@ -1,4 +1,5 @@
 const socketIo = require('socket.io');
+const { v4: uuidv4 } = require('uuid');
 const Message = require('../models/message');
 const User = require('../models/user');
 
@@ -18,17 +19,30 @@ exports.init = (server) => {
     io.on('connection', (socket) => {
         console.log('New client connected', socket.id);
 
-        socket.on('join', (userId) => {
+        socket.on('join', async (userId) => {
+            if (!userId) return;
             socket.join(userId);
-            socket.userId = userId; // Store for disconnect
+            socket.userId = userId;
+
+            console.log(`User ${userId} joined room ${userId}`);
 
             if (!onlineUsers.has(userId)) {
                 onlineUsers.set(userId, new Set());
-                io.emit('userOnline', userId); // Broadcast only if first connection
+                // Update DB to online
+                try {
+                    await User.findByIdAndUpdate(userId, { status: 'online' });
+                    io.emit('userOnline', userId);
+                    console.log(`Broadcasted userOnline for ${userId}`);
+                } catch (e) {
+                    console.error("DB Status Update Error:", e);
+                }
             }
             onlineUsers.get(userId).add(socket.id);
+        });
 
-            console.log(`User ${userId} joined room ${userId} (Online)`);
+        socket.on('getOnlineUsers', (callback) => {
+            const users = Array.from(onlineUsers.keys());
+            if (typeof callback === 'function') callback(users);
         });
 
         socket.on('checkOnlineStatus', (userId, callback) => {
@@ -75,9 +89,10 @@ exports.init = (server) => {
 
                 if (data.recipient) {
                     // 1:1 Chat
-                    console.log("Routing to 1:1:", data.recipient);
-                    io.to(data.recipient).emit('receiveMessage', newMessage);
-                    io.to(data.sender).emit('receiveMessage', newMessage);
+                    const targetRoom = String(data.recipient);
+                    console.log(`Routing to 1:1 Room: ${targetRoom}, Sender: ${data.sender}`);
+                    io.to(targetRoom).emit('receiveMessage', newMessage);
+                    io.to(String(data.sender)).emit('receiveMessage', newMessage);
                 } else if (data.announcementId) {
                     // Announcement Broadcast
                     console.log("Routing to Announcement:", data.announcementId);
@@ -193,6 +208,113 @@ exports.init = (server) => {
             socket.to(data.roomId).emit('ice-candidate', data);
         });
 
+        // --- QR Code Login Handshake ---
+
+        // Map to store QR Code -> User Agent (OS/Browser info)
+        const qrCodeInfo = new Map();
+
+        // 1. Web Client requests a QR Code ID
+        socket.on('web:request_qr', () => {
+            const qrCodeId = uuidv4();
+            socket.join(`qr_${qrCodeId}`);
+
+            // Capture User-Agent from handshake headers
+            const userAgent = socket.request.headers['user-agent'] || '';
+            qrCodeInfo.set(qrCodeId, userAgent);
+
+            socket.emit('web:qr_generated', qrCodeId);
+            console.log(`QR Generated for socket ${socket.id}: ${qrCodeId}`);
+        });
+
+        // 2. Mobile App scans QR and sends token
+        socket.on('mobile:scan_qr', async ({ qrCodeId, token, userId }) => {
+            console.log(`Mobile scanned QR ${qrCodeId} for user ${userId}`);
+
+            // Allow storing device
+            try {
+                const user = await User.findById(userId);
+                if (user) {
+
+                    // Parse User-Agent
+                    let deviceName = 'Web Browser';
+                    const ua = qrCodeInfo.get(qrCodeId) || '';
+                    if (ua.includes('Windows')) deviceName = 'Windows';
+                    else if (ua.includes('Macintosh')) deviceName = 'Mac OS';
+                    else if (ua.includes('Linux')) deviceName = 'Linux';
+                    else if (ua.includes('Android')) deviceName = 'Android Tablet';
+                    else if (ua.includes('iPad')) deviceName = 'iPad';
+
+                    if (ua.includes('Chrome')) deviceName += ' (Chrome)';
+                    else if (ua.includes('Firefox')) deviceName += ' (Firefox)';
+                    else if (ua.includes('Safari') && !ua.includes('Chrome')) deviceName += ' (Safari)';
+                    else if (ua.includes('Edge')) deviceName += ' (Edge)';
+
+                    const newDevice = {
+                        deviceId: uuidv4(),
+                        name: deviceName,
+                        lastActive: new Date()
+                    };
+                    user.linkedDevices.push(newDevice);
+                    await user.save();
+
+                    // Cleanup
+                    qrCodeInfo.delete(qrCodeId);
+                }
+            } catch (e) {
+                console.error("Error saving linked device:", e);
+            }
+
+            // Notify the specific Web Client in the room
+            io.to(`qr_${qrCodeId}`).emit('web:auth_success', { token, userId });
+        });
+
+        socket.on('editMessage', async ({ msgId, content, chatId }) => {
+            try {
+                const message = await Message.findById(msgId);
+                if (!message) return;
+
+                message.content = content;
+                message.isEdited = true;
+                await message.save();
+
+                if (message.recipient) {
+                    io.to(message.recipient.toString()).emit('messageEdited', { msgId, content });
+                    io.to(message.sender.toString()).emit('messageEdited', { msgId, content });
+                } else if (message.groupId) {
+                    io.to(`group_${message.groupId}`).emit('messageEdited', { msgId, content });
+                }
+            } catch (err) {
+                console.error("Edit Error:", err);
+            }
+        });
+
+        socket.on('addReaction', async ({ msgId, emoji, userId }) => {
+            try {
+                const message = await Message.findById(msgId);
+                if (!message) return;
+
+                if (!message.reactions) message.reactions = [];
+                const existing = message.reactions.findIndex(r => r.user.toString() === userId);
+                if (existing !== -1) {
+                    message.reactions[existing].emoji = emoji;
+                } else {
+                    message.reactions.push({ user: userId, emoji });
+                }
+                await message.save();
+
+                const updated = await Message.findById(msgId).populate('reactions.user', 'name');
+
+                if (message.recipient) {
+                    io.to(message.recipient.toString()).emit('messageReaction', { msgId, reactions: updated.reactions });
+                    io.to(message.sender.toString()).emit('messageReaction', { msgId, reactions: updated.reactions });
+                } else if (message.groupId) {
+                    io.to(`group_${message.groupId}`).emit('messageReaction', { msgId, reactions: updated.reactions });
+                }
+            } catch (err) {
+                console.error("Reaction Error:", err);
+            }
+        });
+
         socket.on('disconnect', () => {
             console.log('Client disconnected', socket.id);
             if (socket.userId && onlineUsers.has(socket.userId)) {
@@ -200,6 +322,8 @@ exports.init = (server) => {
                 userSockets.delete(socket.id);
                 if (userSockets.size === 0) {
                     onlineUsers.delete(socket.userId);
+                    // Update DB to offline + lastSeen
+                    User.findByIdAndUpdate(socket.userId, { status: 'offline', lastSeen: new Date() }).catch(e => console.error("Update Status Error:", e));
                     io.emit('userOffline', socket.userId);
                     console.log(`User ${socket.userId} went offline`);
                 }

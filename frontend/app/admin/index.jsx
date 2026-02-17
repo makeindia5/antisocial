@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, ScrollView, StyleSheet, Animated, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Alert, ScrollView, StyleSheet, Animated, Modal, TextInput, KeyboardAvoidingView, Dimensions } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,79 +11,37 @@ import * as Clipboard from 'expo-clipboard';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Platform } from 'react-native';
 
+const { width } = Dimensions.get('window');
+
 export default function AdminDashboard() {
-    const { colors, toggleTheme, isDark } = useTheme();
-    const theme = colors || Colors;
-    const styles = getStyles(theme);
+    const { colors: theme } = useTheme();
+    const router = useRouter();
     const insets = useSafeAreaInsets();
 
-    const router = useRouter();
     const [users, setUsers] = useState([]);
-    const [showMenu, setShowMenu] = useState(false);
-
-    // Scroll Indicator State
-
-    // Scroll Indicator State
-    const scrollX = useRef(new Animated.Value(0)).current;
-    const [contentWidth, setContentWidth] = useState(0);
-    const [containerWidth, setContainerWidth] = useState(0);
-
-    // Meeting State
+    const [meetings, setMeetings] = useState([]); // New State
     const [meetModalVisible, setMeetModalVisible] = useState(false);
-    const [meetTab, setMeetTab] = useState('instant'); // 'instant' | 'schedule'
+    const [companyModalVisible, setCompanyModalVisible] = useState(false);
+
+    // Meeting & Company State
     const [meetTitle, setMeetTitle] = useState('');
     const [meetDate, setMeetDate] = useState(new Date());
-    const [showPicker, setShowPicker] = useState(false);
-    const [mode, setMode] = useState('date');
+    const [meetTab, setMeetTab] = useState('instant');
     const [createdCode, setCreatedCode] = useState(null);
     const [successModalVisible, setSuccessModalVisible] = useState(false);
+    const [showPicker, setShowPicker] = useState(false);
+    const [mode, setMode] = useState('date');
 
-    // Company State
-    const [companyModalVisible, setCompanyModalVisible] = useState(false);
     const [companyName, setCompanyName] = useState('');
     const [contactNumber, setContactNumber] = useState('');
     const [generatedId, setGeneratedId] = useState('');
     const [companyHistory, setCompanyHistory] = useState([]);
     const [showHistory, setShowHistory] = useState(false);
 
-    const handleCreateCompanyId = async () => {
-        if (!companyName.trim()) { Alert.alert("Error", "Enter Company Name"); return; }
-        try {
-            const adminId = await AsyncStorage.getItem('userId');
-            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/company/create`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ companyName, contactNumber, adminId })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setGeneratedId(data.companyId);
-                fetchCompanyHistory(); // Refresh history
-            } else {
-                Alert.alert("Error", data.error);
-            }
-        } catch (e) { Alert.alert("Error", "Failed"); }
-    };
-
-    const fetchCompanyHistory = async () => {
-        try {
-            const adminId = await AsyncStorage.getItem('userId');
-            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/company/history/${adminId}`);
-            const data = await res.json();
-            if (res.ok) setCompanyHistory(data);
-        } catch (e) { console.error(e); }
-    };
-
-    const handleLogout = async () => {
-        // Remove only session data, PRESERVE biometrics and theme
-        const keysToRemove = ['token', 'userId', 'userName', 'userRole', 'profilePic'];
-        await AsyncStorage.multiRemove(keysToRemove);
-        router.replace('/(auth)/login');
-    };
-
     useFocusEffect(
         React.useCallback(() => {
             fetchUsers();
+            fetchMeetings(); // Fetch meetings on focus
         }, [])
     );
 
@@ -92,415 +50,436 @@ export default function AdminDashboard() {
             const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/users`);
             const data = await res.json();
             setUsers(data);
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) { }
     };
 
-
-
-    const createInstantMeet = async () => {
+    const fetchMeetings = async () => {
         try {
-            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/meet`, { method: 'POST' });
+            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/meet/list`);
             const data = await res.json();
-            setCreatedCode(data.roomCode);
-            setSuccessModalVisible(true);
-            setMeetModalVisible(false);
-        } catch (err) {
-            Alert.alert('Error', 'Failed to create meet');
-        }
+            if (res.ok) setMeetings(data);
+        } catch (err) { }
+    };
+
+    const handleCreateCompanyId = async () => {
+        if (!companyName.trim()) { Alert.alert("Error", "Enter Name"); return; }
+        try {
+            const adminId = await AsyncStorage.getItem('userId');
+            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/company/create`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ companyName, contactNumber, adminId })
+            });
+            const data = await res.json();
+            if (res.ok) { setGeneratedId(data.companyId); fetchCompanyHistory(); }
+        } catch (e) { }
+    };
+
+    const fetchCompanyHistory = async () => {
+        try {
+            const adminId = await AsyncStorage.getItem('userId');
+            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/company/history/${adminId}`);
+            if (res.ok) setCompanyHistory(await res.json());
+        } catch (e) { }
     };
 
     const scheduleMeet = async () => {
-        if (!meetTitle.trim()) {
-            Alert.alert("Error", "Please enter a meeting title");
-            return;
-        }
-
+        if (!meetTitle.trim()) { Alert.alert("Error", "Enter Title"); return; }
         try {
             const userId = await AsyncStorage.getItem('userId');
-            const res = await fetch(`${API_BASE}/meet/schedule`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: meetTitle,
-                    scheduledTime: meetDate.toISOString(),
-                    hostId: userId
-                })
+            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/meet/schedule`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: meetTitle, scheduledTime: meetDate.toISOString(), hostId: userId })
             });
-
             const data = await res.json();
             if (res.ok) {
                 setCreatedCode(data.meeting.code);
                 setSuccessModalVisible(true);
                 setMeetModalVisible(false);
-                setMeetTitle('');
-                setMeetDate(new Date());
-            } else {
-                Alert.alert("Error", data.error || "Failed to schedule");
+                fetchMeetings(); // Refresh list
             }
-        } catch (err) {
-            Alert.alert("Error", "Failed to connect to server");
-        }
+        } catch (e) { }
     };
 
-    const copyToClipboard = async () => {
-        await Clipboard.setStringAsync(createdCode);
-        Alert.alert('Copied', 'Meeting code copied to clipboard!');
+    const cancelMeeting = async (id) => {
+        Alert.alert(
+            "Cancel Meeting",
+            "Are you sure you want to cancel this meeting?",
+            [
+                { text: "No", style: "cancel" },
+                {
+                    text: "Yes, Cancel",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/meet/${id}`, {
+                                method: 'DELETE'
+                            });
+                            if (res.ok) {
+                                Alert.alert("Success", "Meeting cancelled");
+                                fetchMeetings();
+                            }
+                        } catch (e) { }
+                    }
+                }
+            ]
+        );
     };
 
-    const onChangeDate = (event, selectedDate) => {
-        const currentDate = selectedDate || meetDate;
-        setShowPicker(Platform.OS === 'ios');
-        setMeetDate(currentDate);
+    const startScheduledMeeting = async (code) => {
+        try {
+            await fetch(`${API_BASE}/meet/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            fetchMeetings(); // Refresh to show Live status
+            router.push(`/meet/${code}`);
+        } catch (e) { router.push(`/meet/${code}`); }
     };
 
-    const showMode = (currentMode) => {
-        setShowPicker(true);
-        setMode(currentMode);
+    const endScheduledMeeting = async (code) => {
+        Alert.alert(
+            "End Meeting",
+            "Are you sure you want to end this live meeting?",
+            [
+                { text: "No", style: "cancel" },
+                {
+                    text: "End Meeting",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const res = await fetch(`${API_BASE}/meet/end`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ code })
+                            });
+                            if (res.ok) {
+                                Alert.alert("Success", "Meeting ended");
+                                fetchMeetings();
+                            }
+                        } catch (e) { }
+                    }
+                }
+            ]
+        );
     };
 
-    // Calculate scroll indicator size and position
-    const indicatorSize = containerWidth > 0 && contentWidth > 0
-        ? (containerWidth / contentWidth) * 30 // Scale down the width, max 30ish
-        : 10;
+    const createInstantMeet = async () => {
+        try {
+            const adminId = await AsyncStorage.getItem('userId');
+            const res = await fetch(`${API_BASE.replace('/auth', '/admin')}/meet`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hostId: adminId })
+            });
+            const data = await res.json();
+            setCreatedCode(data.roomCode);
+            setSuccessModalVisible(true);
+            setMeetModalVisible(false);
+        } catch (e) { }
+    };
 
-    const indicatorTranslateX = scrollX.interpolate({
-        inputRange: [0, Math.max(contentWidth - containerWidth, 1)],
-        outputRange: [0, 30], // Move within a small track
-        extrapolate: 'clamp'
-    });
+    // Actions
+    const ACTIONS = [
+        { icon: 'megaphone', label: 'Announcements', color: '#FF3B30', onPress: () => router.push('/announcement') },
+        { icon: 'videocam', label: 'Meetings', color: '#5856D6', onPress: () => setMeetModalVisible(true) },
+        { icon: 'people', label: 'Discussions', color: '#FF9500', onPress: () => router.push('/gd') },
+        {
+            icon: 'id-card', label: 'Create ID', color: '#007AFF', onPress: () => {
+                setGeneratedId(''); setCompanyName(''); setShowHistory(false); fetchCompanyHistory(); setCompanyModalVisible(true);
+            }
+        },
+    ];
 
-    const renderHeader = () => (
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-            <View style={[styles.headerRow, { justifyContent: 'center', position: 'relative' }]}>
-                <TouchableOpacity onPress={() => router.back()} style={{ position: 'absolute', left: 0, zIndex: 10 }}>
-                    <Ionicons name="arrow-back" size={24} color="white" />
-                </TouchableOpacity>
-                <Text style={styles.headerText}>Admin Dashboard</Text>
-            </View>
-        </View>
-    );
+    const styles = getStyles(theme);
 
     return (
-        <View style={styles.container}>
-            {renderHeader()}
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
+                <TouchableOpacity onPress={() => router.back()} style={{ marginBottom: 10 }}>
+                    <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Details</Text>
+                <Text style={{ fontSize: 32, fontWeight: '800', color: theme.textPrimary, letterSpacing: -1 }}>Admin Dashboard</Text>
+            </View>
 
             <ScrollView contentContainerStyle={{ padding: 20 }}>
-                {/* Actions Grid */}
-                <View>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.horizontalScroll}
-                        contentContainerStyle={styles.horizontalContent}
-                        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false })}
-                        scrollEventThrottle={16}
-                        onContentSizeChange={(w) => setContentWidth(w)}
-                        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-                    >
-                        <TouchableOpacity style={styles.card} onPress={() => router.push('/announcement')}>
-                            <Ionicons name="megaphone-outline" size={32} color={theme.secondary} />
-                            <Text style={styles.cardText}>Announcements</Text>
+                {/* Grid */}
+                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Quick Actions</Text>
+                <View style={styles.grid}>
+                    {ACTIONS.map((a, i) => (
+                        <TouchableOpacity key={i} style={[styles.card, { backgroundColor: theme.surface }]} onPress={a.onPress}>
+                            <View style={[styles.iconCircle, { backgroundColor: a.color + '20' }]}>
+                                <Ionicons name={a.icon} size={28} color={a.color} />
+                            </View>
+                            <Text style={[styles.cardLabel, { color: theme.textPrimary }]}>{a.label}</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.card} onPress={() => setMeetModalVisible(true)}>
-                            <Ionicons name="videocam-outline" size={32} color={theme.secondary} />
-                            <Text style={styles.cardText}>Manage Meetings</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.card} onPress={() => router.push('/gd')}>
-                            <Ionicons name="people-outline" size={32} color={theme.secondary} />
-                            <Text style={styles.cardText}>Group Discussion</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.card} onPress={() => {
-                            setGeneratedId('');
-                            setCompanyName('');
-                            setContactNumber('');
-                            setShowHistory(false);
-                            setCompanyHistory([]);
-                            fetchCompanyHistory(); // Pre-fetch
-                            setCompanyModalVisible(true);
-                        }}>
-                            <Ionicons name="id-card-outline" size={32} color={theme.secondary} />
-                            <Text style={styles.cardText}>Create ID</Text>
-                        </TouchableOpacity>
-                    </ScrollView>
-                    {/* Custom Scroll Indicator */}
-                    <View style={styles.scrollTrack}>
-                        <Animated.View
-                            style={[
-                                styles.scrollIndicator,
-                                {
-                                    width: indicatorSize + 20, // Make it a bit wider pill
-                                    transform: [{ translateX: indicatorTranslateX }]
-                                }
-                            ]}
-                        />
-                    </View>
+                    ))}
                 </View>
 
-                <Text style={styles.sectionTitle}>User Chats</Text>
-                <FlatList
-                    data={users}
-                    keyExtractor={(item) => item._id}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity onPress={() => router.push(`/chat/${item._id}`)} style={styles.userItem}>
-                            <View style={styles.avatar}><Text style={{ color: 'white' }}>{item.name[0]}</Text></View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                    <Text style={styles.userName}>{item.name}</Text>
-                                    {item.lastMessage && (
-                                        <Text style={{ fontSize: 10, color: '#999' }}>
-                                            {new Date(item.lastMessage.createdAt).toLocaleDateString() === new Date().toLocaleDateString()
-                                                ? new Date(item.lastMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                : new Date(item.lastMessage.createdAt).toLocaleDateString()}
-                                        </Text>
-                                    )}
-                                </View>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={styles.userEmail}>{item.email}</Text>
-                                    {item.unreadCount > 0 && (
-                                        <View style={{ backgroundColor: '#25D366', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, minWidth: 20, alignItems: 'center' }}>
-                                            <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{item.unreadCount}</Text>
+                {/* Scheduled Meetings */}
+                {meetings.length > 0 && (
+                    <View style={{ marginTop: 20 }}>
+                        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Upcoming Meetings</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+                            {meetings.map((m, i) => (
+                                <View key={i} style={{ width: 280, padding: 15, backgroundColor: theme.surface, borderRadius: 20, marginRight: 15 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                                                <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.textPrimary, flex: 1 }} numberOfLines={1}>{m.title}</Text>
+                                                {m.isStarted && (
+                                                    <View style={{ backgroundColor: '#FF3B30', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginLeft: 5 }}>
+                                                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 10 }}>LIVE</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 8 }}>
+                                                {new Date(m.scheduledTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} • {new Date(m.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </Text>
+
+                                            {/* Code Display */}
+                                            <TouchableOpacity
+                                                onPress={() => { Clipboard.setStringAsync(m.code); Alert.alert("Copied Code"); }}
+                                                style={{ marginBottom: 10 }}
+                                            >
+                                                <Text style={{ fontSize: 13, color: theme.primary, fontWeight: '600' }}>
+                                                    Code: <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontSize: 15 }}>{m.code}</Text>
+                                                </Text>
+                                            </TouchableOpacity>
                                         </View>
-                                    )}
+
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <TouchableOpacity
+                                                style={{ backgroundColor: m.isStarted ? '#FF3B30' : theme.primary, paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10, marginBottom: 10 }}
+                                                onPress={() => m.isStarted ? endScheduledMeeting(m.code) : startScheduledMeeting(m.code)}
+                                            >
+                                                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>{m.isStarted ? 'End' : 'Start'}</Text>
+                                            </TouchableOpacity>
+
+                                            {!m.isStarted && (
+                                                <TouchableOpacity
+                                                    onPress={() => cancelMeeting(m._id)}
+                                                    style={{ padding: 5 }}
+                                                >
+                                                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+
+                                    <Text style={{ fontSize: 11, color: theme.textSecondary, alignSelf: 'flex-start' }}>By: {m.hostId?.name || 'Admin'}</Text>
                                 </View>
-                            </View>
-                        </TouchableOpacity>
-                    )}
-                    scrollEnabled={false}
-                />
-            </ScrollView>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
 
-
-            {/* Company ID Modal */}
-            <Modal animationType="slide" transparent={true} visible={companyModalVisible} onRequestClose={() => setCompanyModalVisible(false)}>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.successView, { maxHeight: '80%' }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                            <Text style={styles.modalTitle}>{generatedId ? "Company ID Generated" : showHistory ? "History" : "Create Company ID"}</Text>
-                            <TouchableOpacity onPress={() => setShowHistory(!showHistory)}>
-                                <Ionicons name={showHistory ? "create-outline" : "time-outline"} size={24} color={theme.primary} />
-                            </TouchableOpacity>
+                {/* User Table (Excel-like) */}
+                <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: 30 }]}>User Directory</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ marginBottom: 20 }}>
+                    <View>
+                        {/* Header Row */}
+                        <View style={[styles.tableRow, { backgroundColor: theme.inputBg, borderTopLeftRadius: 10, borderTopRightRadius: 10 }]}>
+                            <Text style={[styles.tableHeader, { color: theme.textPrimary, width: 250, paddingLeft: 10 }]}>User</Text>
+                            <Text style={[styles.tableHeader, { color: theme.textPrimary, width: 200 }]}>Email</Text>
+                            <Text style={[styles.tableHeader, { color: theme.textPrimary, width: 100 }]}>Role</Text>
+                            <Text style={[styles.tableHeader, { color: theme.textPrimary, width: 100 }]}>Status</Text>
+                            <Text style={[styles.tableHeader, { color: theme.textPrimary, width: 150 }]}>Last Seen</Text>
                         </View>
 
-                        {showHistory ? (
-                            <FlatList
-                                data={companyHistory}
-                                keyExtractor={(item) => item._id}
-                                style={{ width: '100%' }}
-                                renderItem={({ item }) => (
-                                    <View style={{ backgroundColor: theme.inputBg, padding: 10, borderRadius: 8, marginBottom: 10 }}>
-                                        <Text style={{ fontWeight: 'bold' }}>{item.companyName}</Text>
-                                        <Text style={{ fontSize: 12 }}>ID: {item.companyId}</Text>
-                                        <Text style={{ fontSize: 12, color: '#666' }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                        {/* Data Rows */}
+                        {users.map((u, i) => (
+                            <View key={i} style={[styles.tableRow, { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                                {/* User Column */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', width: 250, paddingLeft: 10 }}>
+                                    <View style={[styles.avatarSmall, { backgroundColor: theme.inputBg }]}>
+                                        {u.profilePic ? (
+                                            <Image source={{ uri: u.profilePic.startsWith('http') ? u.profilePic : `${API_BASE.replace('/api/auth', '')}${u.profilePic}` }} style={{ width: 32, height: 32, borderRadius: 16 }} />
+                                        ) : (
+                                            <Text style={{ fontWeight: 'bold', color: theme.textSecondary, fontSize: 12 }}>{u.name?.[0]?.toUpperCase()}</Text>
+                                        )}
                                     </View>
-                                )}
-                            />
-                        ) : !generatedId ? (
-                            <>
-                                <TextInput
-                                    placeholder="Enter Company Name"
-                                    placeholderTextColor={theme.textLight}
-                                    style={[styles.input, { width: '100%' }]}
-                                    value={companyName}
-                                    onChangeText={setCompanyName}
-                                />
-                                <TextInput
-                                    placeholder="Contact Number (Optional)"
-                                    placeholderTextColor={theme.textLight}
-                                    style={[styles.input, { width: '100%' }]}
-                                    value={contactNumber}
-                                    onChangeText={setContactNumber}
-                                    keyboardType="phone-pad"
-                                />
-                                <TouchableOpacity style={styles.fullWidthBtn} onPress={handleCreateCompanyId}>
-                                    <Text style={styles.btnText}>Generate</Text>
-                                </TouchableOpacity>
-                            </>
-                        ) : (
-                            <>
-                                <View style={styles.codeBox}>
-                                    <Text style={styles.codeTextDisplay}>{generatedId}</Text>
-                                    <TouchableOpacity onPress={() => { Clipboard.setStringAsync(generatedId); Alert.alert("Copied"); }}>
-                                        <Ionicons name="copy-outline" size={24} color={theme.secondary} />
-                                    </TouchableOpacity>
+                                    <Text style={{ fontWeight: '600', color: theme.textPrimary, marginLeft: 10 }}>{u.name}</Text>
                                 </View>
-                                <TouchableOpacity style={[styles.actionBtn, { width: '100%' }]} onPress={() => setCompanyModalVisible(false)}>
-                                    <Text style={styles.btnText}>Done</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
-                        {!generatedId && (
-                            <TouchableOpacity style={styles.closeBtn} onPress={() => setCompanyModalVisible(false)}>
-                                <Text style={{ color: '#666' }}>Cancel</Text>
-                            </TouchableOpacity>
-                        )}
+
+                                {/* Email Column */}
+                                <Text style={{ width: 200, color: theme.textSecondary, fontSize: 13 }}>{u.email}</Text>
+
+                                {/* Role Column */}
+                                <View style={{ width: 100 }}>
+                                    <View style={{ backgroundColor: u.role === 'admin' ? '#FF3B3015' : '#007AFF15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' }}>
+                                        <Text style={{ color: u.role === 'admin' ? '#FF3B30' : '#007AFF', fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' }}>{u.role || 'User'}</Text>
+                                    </View>
+                                </View>
+
+                                {/* Status Column */}
+                                <View style={{ width: 100, flexDirection: 'row', alignItems: 'center' }}>
+                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: u.status === 'online' ? '#4CD964' : '#8E8E93', marginRight: 6 }} />
+                                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{u.status === 'online' ? 'Online' : 'Offline'}</Text>
+                                </View>
+
+                                {/* Last Seen Column */}
+                                <Text style={{ width: 150, color: theme.textSecondary, fontSize: 13 }}>
+                                    {u.lastSeen ? new Date(u.lastSeen).toLocaleDateString() + ' ' + new Date(u.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                </Text>
+                            </View>
+                        ))}
                     </View>
-                </View>
-            </Modal>
+                </ScrollView>
+            </ScrollView>
 
-            {/* Meeting Management Modal */}
-            <Modal animationType="slide" transparent={true} visible={meetModalVisible} onRequestClose={() => setMeetModalVisible(false)}>
-                <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-                    <View style={styles.modalView}>
-                        <Text style={styles.modalTitle}>Manage Meetings</Text>
-
-                        <View style={styles.tabContainer}>
-                            <TouchableOpacity style={[styles.tab, meetTab === 'instant' && styles.activeTab]} onPress={() => setMeetTab('instant')}>
-                                <Text style={[styles.tabText, meetTab === 'instant' && styles.activeTabText]}>Instant</Text>
+            {/* Modals (Simplified UI, logic retained) */}
+            <Modal animationType="slide" transparent visible={meetModalVisible} onRequestClose={() => setMeetModalVisible(false)}>
+                <TouchableOpacity style={styles.modalOverlay} onPress={() => setMeetModalVisible(false)}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.bottomSheet, { backgroundColor: theme.surface }]}>
+                        <Text style={[styles.sheetTitle, { color: theme.textPrimary }]}>Manage Meetings</Text>
+                        <View style={styles.tabRow}>
+                            <TouchableOpacity onPress={() => setMeetTab('instant')} style={[styles.tab, meetTab === 'instant' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]}>
+                                <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Instant</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.tab, meetTab === 'schedule' && styles.activeTab]} onPress={() => setMeetTab('schedule')}>
-                                <Text style={[styles.tabText, meetTab === 'schedule' && styles.activeTabText]}>Schedule</Text>
+                            <TouchableOpacity onPress={() => setMeetTab('schedule')} style={[styles.tab, meetTab === 'schedule' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]}>
+                                <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Schedule</Text>
                             </TouchableOpacity>
                         </View>
 
                         {meetTab === 'instant' ? (
-                            <View style={styles.tabContent}>
-                                <Text style={styles.infoText}>Create a meeting instantly and share the code.</Text>
-                                <TouchableOpacity style={styles.fullWidthBtn} onPress={createInstantMeet}>
-                                    <Ionicons name="flash-outline" size={20} color="white" style={{ marginRight: 10 }} />
-                                    <Text style={styles.btnText}>Start Instant Meeting</Text>
-                                </TouchableOpacity>
-                            </View>
+                            <TouchableOpacity style={[styles.mainBtn, { backgroundColor: theme.secondary }]} onPress={createInstantMeet}>
+                                <Ionicons name="flash" size={20} color="white" style={{ marginRight: 10 }} />
+                                <Text style={{ color: 'white', fontWeight: 'bold' }}>Start Now</Text>
+                            </TouchableOpacity>
                         ) : (
-                            <View style={styles.tabContent}>
+                            <View style={{ gap: 10, marginTop: 10 }}>
                                 <TextInput
                                     placeholder="Meeting Title"
-                                    style={styles.input}
-                                    value={meetTitle}
+                                    placeholderTextColor={theme.textLight}
+                                    style={[styles.input, { color: theme.textPrimary, borderColor: theme.border }]}
                                     onChangeText={setMeetTitle}
                                 />
-
-                                <View style={styles.dateTimeRow}>
-                                    <TouchableOpacity onPress={() => showMode('date')} style={styles.dateBtn}>
-                                        <Ionicons name="calendar-outline" size={20} color="#005b96" />
-                                        <Text style={styles.dateText}>{meetDate.toLocaleDateString()}</Text>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <TouchableOpacity
+                                        onPress={() => { setMode('date'); setShowPicker(true); }}
+                                        style={[styles.input, { flex: 1, marginRight: 5, justifyContent: 'center', borderColor: theme.border }]}
+                                    >
+                                        <Text style={{ color: theme.textPrimary }}>{meetDate.toLocaleDateString()}</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => showMode('time')} style={styles.dateBtn}>
-                                        <Ionicons name="time-outline" size={20} color="#005b96" />
-                                        <Text style={styles.dateText}>{meetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                    <TouchableOpacity
+                                        onPress={() => { setMode('time'); setShowPicker(true); }}
+                                        style={[styles.input, { flex: 1, marginLeft: 5, justifyContent: 'center', borderColor: theme.border }]}
+                                    >
+                                        <Text style={{ color: theme.textPrimary }}>{meetDate.toLocaleTimeString()}</Text>
                                     </TouchableOpacity>
                                 </View>
-
                                 {showPicker && (
                                     <DateTimePicker
-                                        testID="dateTimePicker"
                                         value={meetDate}
                                         mode={mode}
                                         is24Hour={true}
                                         display="default"
-                                        onChange={onChangeDate}
+                                        onChange={(event, selectedDate) => {
+                                            const currentDate = selectedDate || meetDate;
+                                            setShowPicker(Platform.OS === 'ios');
+                                            setMeetDate(currentDate);
+                                        }}
                                     />
                                 )}
-
-                                <TouchableOpacity style={styles.fullWidthBtn} onPress={scheduleMeet}>
-                                    <Text style={styles.btnText}>Schedule Meeting</Text>
+                                <TouchableOpacity style={[styles.mainBtn, { backgroundColor: theme.primary }]} onPress={scheduleMeet}>
+                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Schedule</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
-
-                        <TouchableOpacity style={styles.closeBtn} onPress={() => setMeetModalVisible(false)}>
-                            <Text style={{ color: '#666' }}>Close</Text>
-                        </TouchableOpacity>
-                    </View>
-                </KeyboardAvoidingView>
+                    </KeyboardAvoidingView>
+                </TouchableOpacity>
             </Modal>
 
-            {/* Success Modal */}
-            <Modal animationType="fade" transparent={true} visible={successModalVisible} onRequestClose={() => setSuccessModalVisible(false)}>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.successView}>
-                        <Ionicons name="checkmark-circle" size={60} color="green" />
-                        <Text style={styles.successTitle}>Meeting Created!</Text>
-
-                        <View style={styles.codeBox}>
-                            <Text style={styles.codeTextDisplay}>{createdCode}</Text>
-                            <TouchableOpacity onPress={copyToClipboard} style={{ padding: 10 }}>
-                                <Ionicons name="copy-outline" size={24} color="#005b96" />
-                            </TouchableOpacity>
+            <Modal animationType="slide" transparent visible={companyModalVisible} onRequestClose={() => setCompanyModalVisible(false)}>
+                <TouchableOpacity style={styles.modalOverlay} onPress={() => setCompanyModalVisible(false)}>
+                    <KeyboardAvoidingView behavior='padding' style={[styles.bottomSheet, { backgroundColor: theme.surface }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={[styles.sheetTitle, { color: theme.textPrimary }]}>{generatedId ? 'ID Created' : 'Create Company ID'}</Text>
+                            <TouchableOpacity onPress={() => setShowHistory(!showHistory)}><Ionicons name="time" size={24} color={theme.textSecondary} /></TouchableOpacity>
                         </View>
 
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#666' }]} onPress={() => setSuccessModalVisible(false)}>
-                                <Text style={styles.btnText}>Close</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionBtn} onPress={() => {
-                                setSuccessModalVisible(false);
-                                router.push(`/meet/${createdCode}`);
-                            }}>
-                                <Text style={styles.btnText}>Join Now</Text>
-                            </TouchableOpacity>
-                        </View>
+                        {showHistory ? (
+                            <FlatList data={companyHistory} renderItem={({ item }) => (
+                                <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                                    <Text style={{ color: theme.textPrimary, fontWeight: 'bold' }}>{item.companyName}</Text>
+                                    <Text style={{ color: theme.textSecondary }}>{item.companyId}</Text>
+                                </View>
+                            )} />
+                        ) : !generatedId ? (
+                            <View style={{ gap: 10 }}>
+                                <TextInput placeholder="Company Name" placeholderTextColor={theme.textLight} style={[styles.input, { color: theme.textPrimary, borderColor: theme.border }]} onChangeText={setCompanyName} />
+                                <TextInput placeholder="Contact (Optional)" placeholderTextColor={theme.textLight} style={[styles.input, { color: theme.textPrimary, borderColor: theme.border }]} onChangeText={setContactNumber} />
+                                <TouchableOpacity style={[styles.mainBtn, { backgroundColor: theme.primary }]} onPress={handleCreateCompanyId}>
+                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Generate ID</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={{ alignItems: 'center', gap: 10 }}>
+                                <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.primary, letterSpacing: 2 }}>{generatedId}</Text>
+                                <TouchableOpacity onPress={() => { Clipboard.setStringAsync(generatedId); Alert.alert("Copied"); }}>
+                                    <Text style={{ color: theme.secondary }}>Tap to Copy</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </KeyboardAvoidingView>
+                </TouchableOpacity>
+            </Modal>
+
+            <Modal transparent visible={successModalVisible} onRequestClose={() => setSuccessModalVisible(false)}>
+                <TouchableOpacity style={styles.modalOverlay} onPress={() => setSuccessModalVisible(false)}>
+                    <View style={{ backgroundColor: theme.surface, padding: 30, borderTopLeftRadius: 30, borderTopRightRadius: 30, alignItems: 'center', width: '100%', height: '50%', justifyContent: 'center' }}>
+                        <Ionicons name="checkmark-circle" size={80} color="#4CD964" />
+                        <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.textPrimary, marginVertical: 10 }}>Success!</Text>
+
+                        <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.inputBg, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginVertical: 15 }}
+                            onPress={() => { Clipboard.setStringAsync(createdCode); Alert.alert("Copied to clipboard"); }}
+                        >
+                            <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.textPrimary, marginRight: 15, letterSpacing: 2 }}>{createdCode}</Text>
+                            <Ionicons name="copy-outline" size={24} color={theme.primary} />
+                        </TouchableOpacity>
+
+                        <Text style={{ color: theme.textSecondary, marginBottom: 20 }}>Share this code with others to join.</Text>
+
+                        <TouchableOpacity style={[styles.mainBtn, { backgroundColor: theme.primary, width: '100%' }]} onPress={() => { setSuccessModalVisible(false); router.push(`/meet/${createdCode}`); }}>
+                            <Text style={{ color: 'white', fontWeight: 'bold' }}>Join Now</Text>
+                        </TouchableOpacity>
                     </View>
-                </View>
+                </TouchableOpacity>
             </Modal>
         </View>
     );
 }
 
-const getStyles = (Colors) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.background },
-    header: {
-        backgroundColor: Colors.primary,
-        paddingBottom: 20,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        elevation: 5,
-        marginBottom: 10
-    },
-    headerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 10
-    },
-    headerText: { color: Colors.white, fontSize: 20, fontWeight: 'bold' },
+function getStyles(theme) {
+    return StyleSheet.create({
+        container: { flex: 1 },
+        header: { paddingHorizontal: 20, paddingBottom: 10 },
+        headerTitle: { fontSize: 16, fontWeight: '600', textTransform: 'uppercase', marginBottom: 5, opacity: 0.6 },
+        sectionTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 15 },
+        grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+        card: { width: (width - 50) / 2, padding: 15, borderRadius: 20, marginBottom: 15, alignItems: 'center', justifyContent: 'center', height: 130 },
+        iconCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+        cardLabel: { fontWeight: '600', fontSize: 14 },
+        row: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 16, marginBottom: 10 },
+        avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+        rowTitle: { fontWeight: 'bold', fontSize: 16 },
+        badge: { backgroundColor: '#4CD964', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginRight: 10 },
 
-    dropdownItem: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-    dropdownText: { marginLeft: 10, fontSize: 16, color: Colors.textPrimary, fontWeight: '500' },
-    dropdownDivider: { height: 1, backgroundColor: Colors.border, marginHorizontal: 10 },
+        // Modals
+        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+        bottomSheet: { padding: 30, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+        sheetTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20 },
+        mainBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16, borderRadius: 16, marginTop: 10 },
+        input: { borderWidth: 1, padding: 15, borderRadius: 12, fontSize: 16 },
+        tabRow: { flexDirection: 'row', marginBottom: 20 },
+        tab: { flex: 1, alignItems: 'center', paddingVertical: 10 },
 
-    horizontalScroll: { marginBottom: 5, flexGrow: 0 },
-    horizontalContent: { paddingHorizontal: 5, paddingVertical: 10 },
-    card: { width: 120, backgroundColor: Colors.surface, padding: 10, borderRadius: 10, alignItems: 'center', marginRight: 15, elevation: 3, height: 90, justifyContent: 'center' },
-    cardText: { marginTop: 5, fontSize: 11, fontWeight: 'bold', color: Colors.textPrimary, textAlign: 'center' },
-    scrollTrack: { height: 4, width: 60, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-    scrollIndicator: { height: 4, backgroundColor: Colors.secondary, borderRadius: 2 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 10 },
-    userItem: { flexDirection: 'row', backgroundColor: Colors.surface, padding: 15, borderRadius: 10, marginBottom: 10, alignItems: 'center', elevation: 1 },
-    avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.secondary, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-    userName: { fontWeight: 'bold', fontSize: 16, color: Colors.textPrimary },
-    userEmail: { color: Colors.textSecondary, fontSize: 12 },
-
-    // Modal & Meeting Styles
-    modalView: { margin: 20, marginTop: '30%', backgroundColor: Colors.surface, borderRadius: 20, padding: 25, elevation: 5, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
-    modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: Colors.textPrimary },
-    tabContainer: { flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
-    tab: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-    activeTab: { borderBottomWidth: 2, borderBottomColor: Colors.secondary },
-    tabText: { fontSize: 16, color: Colors.textLight },
-    activeTabText: { color: Colors.secondary, fontWeight: 'bold' },
-    tabContent: { marginBottom: 10 },
-    infoText: { textAlign: 'center', color: Colors.textSecondary, marginBottom: 20 },
-    fullWidthBtn: { backgroundColor: Colors.secondary, padding: 15, borderRadius: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
-    btnText: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
-    input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 16, color: Colors.textPrimary, backgroundColor: Colors.inputBg },
-    dateTimeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-    dateBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: Colors.border, padding: 10, borderRadius: 8, width: '48%' },
-    dateText: { marginLeft: 8, color: Colors.textPrimary },
-    closeBtn: { marginTop: 15, alignItems: 'center', padding: 10 },
-
-    // Success Modal
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-    successView: { width: '80%', backgroundColor: Colors.surface, borderRadius: 20, padding: 30, alignItems: 'center', elevation: 10 },
-    successTitle: { fontSize: 24, fontWeight: 'bold', marginVertical: 10, color: Colors.textPrimary },
-    codeBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.inputBg, padding: 15, borderRadius: 10, marginVertical: 20, width: '100%', justifyContent: 'space-between' },
-    codeTextDisplay: { fontSize: 28, fontWeight: 'bold', letterSpacing: 2, color: Colors.secondary },
-    modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between' },
-    actionBtn: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center', backgroundColor: Colors.secondary, marginHorizontal: 5 }
-});
+        // Table Styles
+        tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 5 },
+        tableHeader: { fontWeight: 'bold', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
+        avatarSmall: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' }
+    });
+}

@@ -12,10 +12,12 @@ router.get('/announcement/list', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 router.post('/meet', adminController.createMeet);
+router.post('/meet/schedule', adminController.scheduleMeet);
+router.get('/meet/list', adminController.getMeetings);
 router.post('/gd/status', adminController.updateGDStatus);
 router.get('/users', adminController.getAllUsers);
-router.delete('/announcement/:id', adminController.deleteAnnouncement);
 router.delete('/message/:id', adminController.deleteMessage);
+router.delete('/meet/:id', adminController.deleteMeeting);
 
 // Group Routes
 router.post('/group', adminController.createGroup);

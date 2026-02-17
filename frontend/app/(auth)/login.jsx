@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, Image, Alert } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, Dimensions, KeyboardAvoidingView, Platform, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { loginUser } from "../../src/controllers/authController";
-import { Colors, GlobalStyles } from "../../src/styles/theme";
+import { Colors } from "../../src/styles/theme";
 import { Ionicons } from "@expo/vector-icons";
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../src/context/ThemeContext";
+import { useSocket } from "../../src/context/SocketContext";
+
+const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
-  const { colors } = useTheme();
-  const theme = colors || Colors;
-  const styles = getStyles(theme);
+  const { colors: theme } = useTheme();
+  const { setUserId, setUserProfile } = useSocket();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedRole, setSelectedRole] = useState('user'); // 'user' or 'admin'
+  const [selectedRole, setSelectedRole] = useState('user');
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -29,35 +32,47 @@ export default function LoginScreen() {
   }, []);
 
   const redirectUser = (user) => {
-    if (user.role === 'admin') router.replace("/admin");
-    else router.replace("/(tabs)/communityScreen");
+    // Sync context
+    setUserId(user.userId);
+    setUserProfile({ name: user.name, profilePic: user.profilePic });
+
+    router.replace("/(tabs)/communityScreen");
   };
 
   const handleLoginPress = async () => {
+    if (!email || !password) return Alert.alert("Error", "Please fill in all fields");
+    setLoading(true);
     try {
       const user = await loginUser(email, password);
 
-      // Enforce Role Check (Manual Only)
       if (user.role !== selectedRole) {
         Alert.alert("Access Denied", `You are not an ${selectedRole === 'admin' ? 'Admin' : 'User'}`);
         return;
       }
 
-      // Check if already enrolled
       const savedEmail = await AsyncStorage.getItem('biometric_email');
       if (savedEmail === email) {
         redirectUser(user);
         return;
       }
 
-      // Ask for Biometrics if supported
+      const bioPromptShown = await AsyncStorage.getItem(`bio_prompt_shown_${email}`);
       const compatible = await LocalAuthentication.hasHardwareAsync();
-      if (compatible) {
+
+      if (compatible && !bioPromptShown) {
         Alert.alert("Enable Biometric Login?", "Would you like to use FaceID/Fingerprint next time?", [
-          { text: "No", style: "cancel", onPress: () => redirectUser(user) },
+          {
+            text: "No",
+            style: "cancel",
+            onPress: async () => {
+              await AsyncStorage.setItem(`bio_prompt_shown_${email}`, 'true');
+              redirectUser(user);
+            }
+          },
           {
             text: "Yes",
             onPress: async () => {
+              await AsyncStorage.setItem(`bio_prompt_shown_${email}`, 'true');
               await AsyncStorage.setItem('biometric_email', email);
               await AsyncStorage.setItem('biometric_password', password);
               redirectUser(user);
@@ -70,6 +85,8 @@ export default function LoginScreen() {
 
     } catch (err) {
       Alert.alert("Login Failed", err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -83,7 +100,7 @@ export default function LoginScreen() {
     }
 
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Login to Hike Finance',
+      promptMessage: 'Login to Intraa',
       fallbackLabel: 'Use Password',
     });
 
@@ -98,226 +115,179 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Curved Header */}
-      <View style={styles.header}>
-        <SafeAreaView>
-          <View style={{ alignItems: 'center', marginTop: 10 }}>
-            <View style={styles.logoContainer}>
-              <Image
-                source={require("../../assets/hike_logo.jpg")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={styles.headerText}>Hike Finance</Text>
-            <Text style={styles.headerSubText}>Secure & Professional</Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center' }}>
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 30 }}>
+
+          {/* Header / Intro */}
+          <View style={{ marginBottom: 40 }}>
+            {/* <View style={styles.logoPlaceholder}>
+                     <Ionicons name="chatbubbles" size={40} color={theme.textPrimary} />
+                </View> */}
+            <Image
+              source={require("../../assets/icon.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={[styles.title, { color: theme.textPrimary }]}>Welcome back.</Text>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+              Sign in to continue.
+            </Text>
           </View>
-        </SafeAreaView>
-      </View>
 
-      <View style={styles.contentContainer}>
-        <View style={styles.card}>
-          <Text style={styles.welcomeText}>Welcome Back</Text>
-
-          {/* Role Toggle */}
-          <View style={styles.toggleContainer}>
+          {/* Role Pills */}
+          <View style={[styles.roleContainer, { backgroundColor: theme.inputBg }]}>
             <TouchableOpacity
-              style={[styles.toggleBtn, selectedRole === 'user' && styles.toggleBtnActive]}
+              style={[styles.roleBtn, selectedRole === 'user' && { backgroundColor: theme.surface, shadowColor: theme.shadow, elevation: 2 }]}
               onPress={() => setSelectedRole('user')}
             >
-              <Text style={[styles.toggleText, selectedRole === 'user' && styles.toggleTextActive]}>User</Text>
+              <Text style={[styles.roleText, selectedRole === 'user' && { fontWeight: 'bold', color: theme.textPrimary }]}>User</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.toggleBtn, selectedRole === 'admin' && styles.toggleBtnActive]}
+              style={[styles.roleBtn, selectedRole === 'admin' && { backgroundColor: theme.surface, shadowColor: theme.shadow, elevation: 2 }]}
               onPress={() => setSelectedRole('admin')}
             >
-              <Text style={[styles.toggleText, selectedRole === 'admin' && styles.toggleTextActive]}>Admin</Text>
+              <Text style={[styles.roleText, selectedRole === 'admin' && { fontWeight: 'bold', color: theme.textPrimary }]}>Admin</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={{ width: '100%' }}>
-            <Text style={styles.label}>Email Address</Text>
-            <TextInput
-              placeholder="name@example.com"
-              placeholderTextColor={theme.textLight}
-              style={styles.input}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              value={email}
-            />
+          {/* Inputs */}
+          <View style={styles.form}>
+            <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="mail-outline" size={20} color={theme.textSecondary} style={{ marginRight: 10 }} />
+              <TextInput
+                placeholder="Email or Phone"
+                placeholderTextColor={theme.textLight}
+                style={[styles.input, { color: theme.textPrimary }]}
+                onChangeText={setEmail}
+                value={email}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
 
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              placeholder="••••••••"
-              placeholderTextColor={theme.textLight}
-              secureTextEntry
-              style={styles.input}
-              onChangeText={setPassword}
-              value={password}
-            />
+            <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} style={{ marginRight: 10 }} />
+              <TextInput
+                placeholder="Password"
+                placeholderTextColor={theme.textLight}
+                style={[styles.input, { color: theme.textPrimary }]}
+                onChangeText={setPassword}
+                value={password}
+                secureTextEntry
+              />
+            </View>
 
-            <TouchableOpacity style={[styles.button, { marginTop: 10 }]} onPress={handleLoginPress}>
-              <Text style={GlobalStyles.buttonText}>Sign In</Text>
+            {/* Main Action */}
+            <TouchableOpacity style={[styles.mainBtn, { backgroundColor: theme.primary }]} onPress={handleLoginPress} disabled={loading}>
+              <Text style={styles.btnText}>{loading ? "Signing in..." : "Sign In"}</Text>
+              {!loading && <Ionicons name="arrow-forward" size={20} color="white" style={{ marginLeft: 10 }} />}
             </TouchableOpacity>
 
-            {/* Biometric Button */}
+            {/* Biometric */}
             {isBiometricSupported && (
-              <TouchableOpacity style={styles.biometricBtn} onPress={handleBiometricAuth}>
-                <Ionicons name="finger-print" size={32} color={theme.primary} />
-                <Text style={styles.biometricText}>Login with Biometrics</Text>
+              <TouchableOpacity style={styles.bioBtn} onPress={handleBiometricAuth}>
+                <Ionicons name="finger-print" size={32} color={theme.textSecondary} />
               </TouchableOpacity>
             )}
 
+            {/* Footer Link */}
+            <View style={styles.footer}>
+              <Text style={{ color: theme.textSecondary }}>Don't have an account? </Text>
+              <TouchableOpacity onPress={() => router.push("/register")}>
+                <Text style={{ color: theme.textPrimary, fontWeight: 'bold' }}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <TouchableOpacity onPress={() => router.push("/(auth)/signUpScreen")} style={{ marginTop: 20 }}>
-            <Text style={{ color: theme.textSecondary }}>Don't have an account? <Text style={{ color: theme.secondary, fontWeight: 'bold' }}>Sign Up</Text></Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
-function getStyles(theme) {
-  return StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.background },
-    header: {
-      backgroundColor: theme.primary,
-      height: 300,
-      borderBottomLeftRadius: 30,
-      borderBottomRightRadius: 30,
-      alignItems: 'center',
-      width: '100%',
-      position: 'absolute',
-      top: 0,
-    },
-    logoContainer: {
-      width: 100,
-      height: 100,
-      backgroundColor: 'white',
-      borderRadius: 30,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 15,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 10,
-      elevation: 8
-    },
-    logo: {
-      width: 80,
-      height: 80,
-      borderRadius: 20
-    },
-    headerText: {
-      color: theme.white,
-      fontSize: 28,
-      fontWeight: 'bold',
-      letterSpacing: 1,
-      lineHeight: 40,
-      marginBottom: 5
-    },
-    headerSubText: {
-      color: theme.textLight,
-      fontSize: 14,
-      marginTop: 8
-    },
-    contentContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      paddingHorizontal: 20,
-      marginTop: 130
-    },
-    card: {
-      backgroundColor: theme.surface,
-      borderRadius: 20,
-      padding: 25,
-      alignItems: 'center',
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.1,
-      shadowRadius: 20,
-      elevation: 10,
-    },
-    welcomeText: {
-      fontSize: 22,
-      fontWeight: 'bold',
-      color: theme.textPrimary,
-      marginBottom: 20
-    },
-    toggleContainer: {
-      flexDirection: 'row',
-      marginBottom: 20,
-      backgroundColor: theme.inputBg,
-      borderRadius: 15,
-      padding: 4,
-      width: '100%',
-    },
-    toggleBtn: {
-      flex: 1,
-      paddingVertical: 10,
-      alignItems: 'center',
-      borderRadius: 12
-    },
-    toggleBtnActive: {
-      backgroundColor: theme.surface,
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    toggleText: { fontSize: 14, color: theme.textSecondary, fontWeight: '600' },
-    toggleTextActive: { color: theme.textPrimary, fontWeight: 'bold' },
-    label: {
-      alignSelf: 'flex-start',
-      color: theme.textPrimary,
-      fontWeight: '500',
-      marginLeft: 4,
-      marginBottom: 6
-    },
-    input: {
-      backgroundColor: theme.inputBg,
-      padding: 15,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-      color: theme.textPrimary,
-      fontSize: 16,
-      marginBottom: 10,
-      width: '100%'
-    },
-    button: {
-      backgroundColor: theme.primary,
-      padding: 16,
-      borderRadius: 14,
-      alignItems: 'center',
-      marginTop: 15,
-      width: '100%',
-      shadowColor: theme.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 5
-    },
-    biometricBtn: {
-      marginTop: 20,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 10,
-      backgroundColor: theme.inputBg,
-      borderRadius: 12,
-      width: '100%'
-    },
-    biometricText: {
-      marginLeft: 10,
-      fontSize: 16,
-      color: theme.primary,
-      fontWeight: '600'
-    }
-  });
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  logoPlaceholder: {
+    width: 60, height: 60,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 20
+  },
+  logo: {
+    width: 60,
+    height: 60,
+    borderRadius: 15,
+    marginBottom: 20
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginBottom: 5
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: '500'
+  },
+  roleContainer: {
+    flexDirection: 'row',
+    padding: 4,
+    borderRadius: 16,
+    marginBottom: 30
+  },
+  roleBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 12
+  },
+  roleText: {
+    color: '#999',
+  },
+  form: {
+    gap: 15
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: Platform.OS === 'ios' ? 15 : 5,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: '500'
+  },
+  mainBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 18,
+    borderRadius: 20,
+    marginTop: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10
+  },
+  btnText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold'
+  },
+  bioBtn: {
+    alignSelf: 'center',
+    marginTop: 20,
+    padding: 10
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 30
+  }
+});

@@ -7,8 +7,10 @@ const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
     const systemScheme = useColorScheme(); // 'light' or 'dark'
-    const [isDark, setIsDark] = useState(false);
+    const [themeMode, setThemeMode] = useState('system'); // 'light', 'dark', 'system'
     const [loaded, setLoaded] = useState(false);
+
+    const [activeMode, setActiveMode] = useState('personal'); // 'personal', 'work', 'social'
 
     useEffect(() => {
         loadTheme();
@@ -16,12 +18,9 @@ export const ThemeProvider = ({ children }) => {
 
     const loadTheme = async () => {
         try {
-            const stored = await AsyncStorage.getItem('appTheme');
+            const stored = await AsyncStorage.getItem('appThemeMode');
             if (stored) {
-                setIsDark(stored === 'dark');
-            } else {
-                // Default to system, or light for now
-                setIsDark(systemScheme === 'dark');
+                setThemeMode(stored);
             }
         } catch (e) {
             console.log("Theme load error", e);
@@ -30,22 +29,23 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
-    const toggleTheme = async () => {
-        const newMode = !isDark;
-        setIsDark(newMode);
+    const setScheme = async (mode) => {
+        setThemeMode(mode);
         try {
-            await AsyncStorage.setItem('appTheme', newMode ? 'dark' : 'light');
+            await AsyncStorage.setItem('appThemeMode', mode);
         } catch (e) {
             console.log("Theme save error", e);
         }
     };
 
+    // Calculate effective dark mode
+    const isDark = themeMode === 'system' ? systemScheme === 'dark' : themeMode === 'dark';
     const colors = isDark ? DarkColors : LightColors;
 
-    if (!loaded) return null; // Or splash screen
+    if (!loaded) return null;
 
     return (
-        <ThemeContext.Provider value={{ isDark, toggleTheme, colors }}>
+        <ThemeContext.Provider value={{ isDark, themeMode, setScheme, colors, activeMode, setActiveMode }}>
             {children}
         </ThemeContext.Provider>
     );

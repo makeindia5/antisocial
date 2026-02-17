@@ -2,19 +2,19 @@ import { StyleSheet } from 'react-native';
 
 export const LightColors = {
     // Brand
-    primary: '#03396c',
-    primaryLight: '#2c5d8f',
-    secondary: '#005b96',
+    primary: '#0061FF', // Modern "Digital Blue"
+    primaryLight: '#4d91ff',
+    secondary: '#004ecb',
     accent: '#f59e0b',
 
     // Backgrounds
-    background: '#f2f2f7',
+    background: '#f8f9fa',
     surface: '#ffffff',
 
     // Text
-    textPrimary: '#0f172a',
-    textSecondary: '#64748b',
-    textLight: '#94a3b8',
+    textPrimary: '#1a1a2d',
+    textSecondary: '#0061FF', // Updated to match primary
+    textLight: '#8b9bb4',
     white: '#ffffff',
 
     // Status
@@ -23,24 +23,24 @@ export const LightColors = {
     warning: '#f59e0b',
 
     // UI
-    border: '#e2e8f0',
-    inputBg: '#f8fafc',
+    border: '#e1e4e8',
+    inputBg: '#f0f2f5',
     shadow: '#000000',
 };
 
 export const DarkColors = {
     // Brand
-    primary: '#0f172a', // Darker Header
-    primaryLight: '#1e293b',
-    secondary: '#3b82f6', // Brighter Blue for Dark Mode
+    primary: '#0061FF',
+    primaryLight: '#4d91ff',
+    secondary: '#004ecb',
     accent: '#fbbf24',
 
     // Backgrounds
-    background: '#020617', // Very Dark Blue/Black
-    surface: '#1e293b',    // Card Background
+    background: '#0f172a',
+    surface: '#1e293b',
 
     // Text
-    textPrimary: '#f8fafc', // White text
+    textPrimary: '#f1f5f9',
     textSecondary: '#94a3b8',
     textLight: '#64748b',
     white: '#ffffff',
@@ -52,12 +52,26 @@ export const DarkColors = {
 
     // UI
     border: '#334155',
-    inputBg: '#334155', // Dark Input
+    inputBg: '#1e293b',
     shadow: '#000000',
 };
 
 // Default export for backward compat (will point to Light)
 export const Colors = LightColors;
+
+export const PersonalColors = {
+    primary: '#075E54', // Teal Green
+    primaryLight: '#25D366', // Lighter Green
+    secondary: '#128C7E',
+    accent: '#25D366',
+    background: '#ffffff',
+    surface: '#ffffff',
+    textPrimary: '#000000',
+    textSecondary: '#667781',
+    border: '#e1e4e8',
+    inputBg: '#f0f2f5',
+    white: '#ffffff',
+};
 
 export const GlobalStyles = StyleSheet.create({
     container: {

@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { StyleSheet, Text, View, Image, Dimensions } from "react-native";
+import { StyleSheet, Text, View, Image, Dimensions, Platform } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, runOnJS } from "react-native-reanimated";
 import { useEffect } from "react";
 import { Colors } from "../src/styles/theme";
@@ -21,9 +21,13 @@ export default function Index() {
     textOpacity.value = withDelay(500, withTiming(1, { duration: 800 }));
     textTranslateY.value = withDelay(500, withSpring(0));
 
-    // 3. Navigate to Login
+    // 3. Navigate
     const timer = setTimeout(() => {
-      router.replace("/(auth)/login");
+      if (Platform.OS === 'web') {
+        router.replace("/web-login");
+      } else {
+        router.replace("/(auth)/login");
+      }
     }, 2000);
 
     return () => clearTimeout(timer);
@@ -43,14 +47,14 @@ export default function Index() {
     <View style={styles.container}>
       <Animated.View style={[styles.logoContainer, logoStyle]}>
         <Image
-          source={require("../assets/hike_logo.jpg")}
+          source={require("../assets/icon.png")}
           style={styles.logo}
           resizeMode="contain"
         />
       </Animated.View>
 
       <Animated.View style={textStyle}>
-        <Text style={styles.appName}>Hike Finance</Text>
+        <Text style={styles.appName}>Intraa</Text>
         <Text style={styles.tagline}>Secure • Fast • Professional</Text>
       </Animated.View>
     </View>

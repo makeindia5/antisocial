@@ -1,0 +1,6 @@
+[dotenv@17.2.3] injecting env (1) from .env -- tip: ⚙️  override existing env vars with { override: true }
+STATS_START
+TOTAL_MESSAGES: 187
+FIRST_DATE: 2026-01-02T08:16:22.073Z
+LAST_DATE: 2026-02-10T09:24:40.336Z
+STATS_END

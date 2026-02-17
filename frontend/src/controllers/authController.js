@@ -4,6 +4,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const loginUser = async (email, password) => {
   const data = await authRequest("/login", { email, password });
+  if (data.token) await AsyncStorage.setItem("token", data.token);
+  await AsyncStorage.setItem("userData", JSON.stringify(data)); // Save full object for easy access
   await AsyncStorage.setItem("userId", data.userId);
   await AsyncStorage.setItem("userRole", data.role);
   if (data.name) await AsyncStorage.setItem("userName", data.name);
@@ -22,7 +24,7 @@ export const startSignup = async (email) => {
   return await requestOTP(email);
 };
 
-export const completeSignup = async (username, email, password, otp) => {
+export const completeSignup = async (username, email, password, otp, phoneNumber) => {
   await verifyOTPCode(email, otp);
-  return await authRequest("/signup", { name: username, email, password });
+  return await authRequest("/signup", { name: username, email, password, phoneNumber });
 };
