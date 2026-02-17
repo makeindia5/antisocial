@@ -18,7 +18,8 @@ const messageSchema = new mongoose.Schema({
     }],
     status: { type: String, enum: ['sent', 'delivered', 'read'], default: 'sent' },
     createdAt: { type: Date, default: Date.now },
-    starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+    starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 
 module.exports = mongoose.model('Message', messageSchema);

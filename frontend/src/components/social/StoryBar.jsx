@@ -9,36 +9,21 @@ const SERVER_ROOT = API_BASE.replace('/api/auth', '');
 export default function StoryBar({ theme, statuses = [], onCreateStatus, onViewStatus, currentUser }) {
 
     const storyGroups = useMemo(() => {
-        // Group statuses by user
-        const groups = {};
-        statuses.forEach(status => {
-            const userId = status.user._id;
-            if (!groups[userId]) {
-                groups[userId] = {
-                    user: status.user,
-                    statuses: [],
-                    latest: status.createdAt
-                };
-            }
-            groups[userId].statuses.push(status);
-        });
-
-        // Convert to array
-        let groupList = Object.values(groups);
-
-        // Sort: My story first? Or just sort by latest
-        // Actually, we want "My Story" to be a separate fixed item at the start usually
-        // But if I have a story, it should be in the list? 
-        // Let's standard approach: 
-        // 1. "Add Story" / "My Story" (if exists) at index 0.
-        // 2. Others sorted by latest.
+        // statuses is already an array of groups: { user, items, latestTime }
 
         const myId = currentUser?._id;
-        const myStory = groupList.find(g => g.user._id === myId);
-        const others = groupList.filter(g => g.user._id !== myId).sort((a, b) => new Date(b.latest) - new Date(a.latest));
+        const myStory = statuses.find(g => String(g.user?._id || g.user) === String(myId));
+        const others = statuses.filter(g => String(g.user?._id || g.user) !== String(myId));
 
         return { myStory, others };
     }, [statuses, currentUser]);
+
+    const isAllViewed = (group) => {
+        if (!group || !group.items || group.items.length === 0) return true;
+        return group.items.every(item =>
+            item.viewers && item.viewers.some(v => String(v.user?._id || v.user) === String(currentUser?._id))
+        );
+    };
 
     return (
         <View style={[styles.container, { borderBottomColor: theme.border }]}>
@@ -51,10 +36,14 @@ export default function StoryBar({ theme, statuses = [], onCreateStatus, onViewS
                 >
                     <View style={styles.ringContainer}>
                         {storyGroups.myStory ? (
-                            <LinearGradient
-                                colors={['#feda75', '#fa7e1e', '#d62976', '#962fbf', '#4f5bd5']}
-                                style={styles.gradientRing}
-                            />
+                            isAllViewed(storyGroups.myStory) ? (
+                                <View style={[styles.gradientRing, { borderWidth: 2, borderColor: theme.border || '#ccc', backgroundColor: 'transparent' }]} />
+                            ) : (
+                                <LinearGradient
+                                    colors={['#feda75', '#fa7e1e', '#d62976', '#962fbf', '#4f5bd5']}
+                                    style={styles.gradientRing}
+                                />
+                            )
                         ) : null}
                         <View style={[styles.avatarContainer, { backgroundColor: theme.surface }]}>
                             {currentUser?.profilePic ? (
@@ -64,11 +53,12 @@ export default function StoryBar({ theme, statuses = [], onCreateStatus, onViewS
                                     <Ionicons name="person" size={30} color={theme.textSecondary} />
                                 </View>
                             )}
-                            {!storyGroups.myStory && (
-                                <View style={[styles.addIcon, { backgroundColor: theme.primary, borderColor: theme.surface }]}>
-                                    <Ionicons name="add" size={14} color="white" />
-                                </View>
-                            )}
+                            <TouchableOpacity
+                                style={[styles.addIcon, { backgroundColor: theme.primary, borderColor: theme.surface }]}
+                                onPress={onCreateStatus}
+                            >
+                                <Ionicons name="add" size={14} color="white" />
+                            </TouchableOpacity>
                         </View>
                     </View>
                     <Text style={[styles.storyName, { color: theme.textPrimary }]} numberOfLines={1}>
@@ -80,10 +70,14 @@ export default function StoryBar({ theme, statuses = [], onCreateStatus, onViewS
                 {storyGroups.others.map((group) => (
                     <TouchableOpacity key={group.user._id} style={styles.storyItem} onPress={() => onViewStatus(group)}>
                         <View style={styles.ringContainer}>
-                            <LinearGradient
-                                colors={['#feda75', '#fa7e1e', '#d62976', '#962fbf', '#4f5bd5']}
-                                style={styles.gradientRing}
-                            />
+                            {isAllViewed(group) ? (
+                                <View style={[styles.gradientRing, { borderWidth: 2, borderColor: theme.border || '#ccc', backgroundColor: 'transparent' }]} />
+                            ) : (
+                                <LinearGradient
+                                    colors={['#feda75', '#fa7e1e', '#d62976', '#962fbf', '#4f5bd5']}
+                                    style={styles.gradientRing}
+                                />
+                            )}
                             <View style={[styles.avatarContainer, { backgroundColor: theme.surface }]}>
                                 {group.user.profilePic ? (
                                     <Image source={{ uri: group.user.profilePic.startsWith('http') ? group.user.profilePic : `${SERVER_ROOT}${group.user.profilePic}` }} style={styles.avatar} />

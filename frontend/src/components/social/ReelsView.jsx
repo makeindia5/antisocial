@@ -5,7 +5,7 @@ import {
     Platform, TouchableWithoutFeedback, Animated, StatusBar, PanResponder,
     Share, RefreshControl
 } from 'react-native';
-import { Video } from 'expo-av';
+import { Video, ResizeMode } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import io from 'socket.io-client';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,16 @@ import CommentsModal from './modals/CommentsModal';
 
 const { width, height } = Dimensions.get('window');
 const SCREEN_HEIGHT = height;
+
+const getVideoUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    // Remove /api/auth to get base
+    const base = API_BASE.replace('/api/auth', '');
+    // Ensure url starts with /
+    const path = url.startsWith('/') ? url : `/${url}`;
+    return `${base}${path}`;
+};
 
 const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpeed, onOpenComments, uiVisible, toggleUi, isCommentsOpen, isHidden, onUndoHide, onShare }) => {
     const video = useRef(null);
@@ -32,17 +42,30 @@ const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpe
 
     const isLiked = item.likes?.includes(currentUser?._id) || false;
 
+    const videoSource = getVideoUrl(item.url);
+    console.log(`[ReelItem] user: ${item.user?.name}, source: ${videoSource}`);
+
+    const [statusText, setStatusText] = useState("Initializing...");
+
     return (
         <TouchableWithoutFeedback onPress={toggleUi}>
             <View style={[styles.reelContainer, { height: SCREEN_HEIGHT }]}>
+                <View style={{ position: 'absolute', zIndex: 99, top: 100, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10 }}>
+                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Status: {statusText}</Text>
+                    <Text style={{ color: 'yellow', fontSize: 10 }}>URI: {getVideoUrl(item.url)}</Text>
+                </View>
                 <Video
                     ref={video}
                     style={styles.video}
-                    source={{ uri: (item.url || '').startsWith('http') ? item.url : `${API_BASE.replace('/api/auth', '')}${item.url || ''}` }}
-                    resizeMode="cover"
+                    source={{ uri: getVideoUrl(item.url) }}
+                    resizeMode={ResizeMode.COVER}
                     isLooping
                     shouldPlay={isActive}
                     rate={playbackSpeed}
+                    useNativeControls={true}
+                    onLoadStart={() => setStatusText("Loading...")}
+                    onLoad={(status) => setStatusText(`Loaded (${status.durationMillis}ms)`)}
+                    onError={(e) => setStatusText(`Error: ${e.error || JSON.stringify(e)}`)}
                 />
 
                 {/* Hidden Blur Overlay */}
@@ -554,6 +577,7 @@ const styles = StyleSheet.create({
     video: {
         width: '100%',
         height: '100%',
+        backgroundColor: 'red', // DEBUG: Visible if video fails to load
     },
     overlay: {
         position: 'absolute',

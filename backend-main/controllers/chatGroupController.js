@@ -53,7 +53,12 @@ exports.getChatGroup = async (req, res) => {
 // Get Group Messages
 exports.getChatGroupMessages = async (req, res) => {
     try {
-        const messages = await Message.find({ groupId: req.params.groupId })
+        const query = { groupId: req.params.groupId };
+        if (req.query.userId) {
+            query.deletedFor = { $ne: req.query.userId };
+        }
+
+        const messages = await Message.find(query)
             .populate('sender', 'name profilePic')
             .sort({ createdAt: 1 });
         res.json(messages);

@@ -21,6 +21,34 @@ import { Colors } from '../../src/styles/theme';
 
 const BACKEND_URL = "http://192.168.29.129:5000";
 
+const formatDateLabel = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+
+    if (now.getDate() === date.getDate() && now.getMonth() === date.getMonth() && now.getFullYear() === date.getFullYear()) return "Today";
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (yesterday.getDate() === date.getDate() && yesterday.getMonth() === date.getMonth() && yesterday.getFullYear() === date.getFullYear()) return "Yesterday";
+
+    return date.toLocaleDateString();
+};
+
+const processMessagesWithDates = (messages) => {
+    const processed = [];
+    let lastDate = null;
+
+    messages.forEach(msg => {
+        const dateLabel = formatDateLabel(msg.createdAt || Date.now());
+        if (dateLabel !== lastDate) {
+            processed.push({ type: 'date_header', content: dateLabel, _id: `date-${dateLabel}-${processed.length}` });
+            lastDate = dateLabel;
+        }
+        processed.push(msg);
+    });
+    return processed;
+};
+
 export default function ChatScreen() {
     const { colors: theme, toggleTheme } = useTheme();
     const { socket, onlineUsers, markAsRead } = useSocket();
@@ -137,19 +165,34 @@ export default function ChatScreen() {
             case 'copy':
                 await Clipboard.setStringAsync(selectedMessage.content || "");
                 break;
-            case 'delete':
-                Alert.alert("Delete Message", "Delete for everyone?", [
+            case 'delete': {
+                const senderId = String(selectedMessage?.sender?._id || selectedMessage?.sender);
+                const isMe = senderId === String(myId);
+
+                const options = [
                     { text: "Cancel", style: "cancel" },
                     {
-                        text: "Delete",
-                        style: "destructive",
+                        text: "Delete for me",
                         onPress: () => {
-                            socket.emit('deleteMessage', { msgId: selectedMessage._id, chatId: id });
+                            socket.emit('deleteMessageForMe', { msgId: selectedMessage._id, userId: myId });
                             setMessages(prev => prev.filter(m => m._id !== selectedMessage._id));
                         }
                     }
-                ]);
+                ];
+
+                if (isMe) {
+                    options.push({
+                        text: "Delete for everyone",
+                        style: "destructive",
+                        onPress: () => {
+                            socket.emit('deleteMessage', { msgId: selectedMessage._id, chatId: id });
+                        }
+                    });
+                }
+
+                Alert.alert("Delete Message", "Choose an option", options);
                 break;
+            }
             case 'forward':
                 setForwardModalVisible(true);
                 fetchForwardUsers();
@@ -177,7 +220,7 @@ export default function ChatScreen() {
             case 'info':
                 Alert.alert("Message Info", `Sent: ${new Date(selectedMessage?.createdAt).toLocaleString()}`);
                 break;
-            case 'edit':
+            case 'edit': {
                 const senderId = String(selectedMessage?.sender?._id || selectedMessage?.sender);
                 if (senderId === String(myId)) {
                     setText(selectedMessage?.content);
@@ -187,6 +230,7 @@ export default function ChatScreen() {
                     Alert.alert("Error", "You can only edit your own messages");
                 }
                 break;
+            }
         }
         if (action !== 'forward' && action !== 'edit') {
             setSelectedMessage(null);
@@ -616,10 +660,23 @@ export default function ChatScreen() {
 
                     <FlatList
                         ref={flatListRef}
-                        data={filteredMessages} // USE FILTERED MESSAGES
-                        keyExtractor={(item, index) => index.toString()}
-                        // ...
+                        data={processMessagesWithDates(filteredMessages)}
+                        keyExtractor={(item, index) => item._id || index.toString()}
+                        contentContainerStyle={{ paddingTop: 15, paddingBottom: 20 }}
+                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                        style={{ flex: 1 }}
+                        keyboardShouldPersistTaps="handled"
                         renderItem={({ item, index }) => {
+                            if (item.type === 'date_header') {
+                                return (
+                                    <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                                        <View style={{ backgroundColor: isSocial ? '#f0f0f0' : (theme.dark ? '#333' : '#e1f5fe'), paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+                                            <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>{item.content}</Text>
+                                        </View>
+                                    </View>
+                                );
+                            }
                             const isMe = (typeof item.sender === 'object' ? item.sender._id : item.sender) === myId;
 
                             // Determine if we should use a Gradient (Social Mode + Sent by Me)
@@ -676,8 +733,78 @@ export default function ChatScreen() {
                     />
 
                     {/* Input Bar */}
-                    <View style={[styles.inputContainerWrapper, { backgroundColor: isSocial ? 'white' : 'transparent', paddingBottom: 10, borderTopWidth: isSocial ? 1 : 0, borderTopColor: '#efefef' }]}>
-                        {/* ... */}
+                    <View style={[
+                        styles.inputContainerWrapper,
+                        {
+                            backgroundColor: isSocial ? 'white' : 'transparent',
+                            paddingBottom: 10,
+                            borderTopWidth: isSocial ? 1 : 0,
+                            borderTopColor: '#efefef'
+                        }
+                    ]}>
+                        <View style={[
+                            styles.floatingInputBar,
+                            {
+                                backgroundColor: isSocial ? '#f0f0f0' : (theme.dark ? '#1c1c1e' : 'white'),
+                                borderRadius: 25,
+                                marginHorizontal: 10,
+                                paddingVertical: 5
+                            }
+                        ]}>
+                            <TouchableOpacity
+                                onPress={() => setAttachmentMenuVisible(true)}
+                                style={[
+                                    styles.iconBtn,
+                                    {
+                                        backgroundColor: isSocial ? 'white' : (theme.dark ? '#333' : '#e6f2f1'),
+                                        width: 36, height: 36, borderRadius: 18,
+                                        alignItems: 'center', justifyContent: 'center', marginLeft: 5
+                                    }
+                                ]}
+                            >
+                                <Ionicons name="add" size={24} color={isSocial ? 'black' : (theme.dark ? 'white' : '#075E54')} />
+                            </TouchableOpacity>
+
+                            <TextInput
+                                ref={inputRef}
+                                value={text}
+                                onChangeText={setText}
+                                style={[
+                                    styles.input,
+                                    {
+                                        color: isSocial ? 'black' : theme.textPrimary,
+                                        marginLeft: 10
+                                    }
+                                ]}
+                                placeholder="Type a message..."
+                                placeholderTextColor={isSocial ? '#999' : theme.textSecondary}
+                                multiline
+                            />
+
+                            {text.length > 0 ? (
+                                <TouchableOpacity
+                                    onPress={() => sendMessage('text')}
+                                    style={[
+                                        styles.sendBtn,
+                                        {
+                                            backgroundColor: isSocial ? '#0095F6' : (isAdminSupport === 'true' ? '#0061FF' : '#075E54'),
+                                            width: 36, height: 36, borderRadius: 18, marginLeft: 5
+                                        }
+                                    ]}
+                                >
+                                    <Ionicons name="arrow-up" size={20} color="white" />
+                                </TouchableOpacity>
+                            ) : (
+                                <>
+                                    <TouchableOpacity style={styles.iconBtn} onPress={() => pickImage(true)}>
+                                        <Ionicons name="camera-outline" size={24} color={isSocial ? 'black' : (theme.textSecondary || '#075E54')} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.iconBtn}>
+                                        <Ionicons name="mic-outline" size={24} color={isSocial ? 'black' : (theme.textSecondary || '#075E54')} />
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                        </View>
                     </View>
 
                 </KeyboardAvoidingView>

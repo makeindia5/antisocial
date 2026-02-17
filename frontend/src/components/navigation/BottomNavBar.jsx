@@ -8,11 +8,11 @@ const TABS = {
         { key: 'groups', label: 'Groups', icon: 'people' },
         { key: 'updates', label: 'Updates', icon: 'disc' },
         { key: 'calls', label: 'Calls', icon: 'call' },
-        { key: 'settings', label: 'Settings', icon: 'settings' }
+        { key: 'settings', label: 'Menu', icon: 'grid' }
     ],
     work: [
         { key: 'home', label: 'Work', icon: 'briefcase' },
-        { key: 'settings', label: 'Settings', icon: 'settings' }
+        { key: 'settings', label: 'Menu', icon: 'grid' }
     ],
     social: [
         { key: 'home', label: 'Home', icon: 'home' },
@@ -20,7 +20,7 @@ const TABS = {
         { key: 'create', label: 'Create', icon: 'add-circle' },
         { key: 'reels', label: 'Reels', icon: 'play' },
         { key: 'profile', label: 'Profile', icon: 'person' },
-        { key: 'settings', label: 'Settings', icon: 'settings' }
+        { key: 'settings', label: 'Menu', icon: 'grid' }
     ]
 };
 

@@ -529,6 +529,46 @@ export default function CommunityScreen() {
         } catch (e) { console.log("Fetch Status Error", e); }
     };
 
+    const handleCreateStory = () => {
+        Alert.alert(
+            "Add to Story",
+            "Share a photo or video",
+            [
+                {
+                    text: "Camera",
+                    onPress: async () => {
+                        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                        if (status !== 'granted') return Alert.alert("Error", "Camera permission required");
+                        const res = await ImagePicker.launchCameraAsync({
+                            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                            quality: 0.8,
+                            allowsEditing: true,
+                            aspect: [9, 16],
+                        });
+                        if (!res.canceled && res.assets[0]) {
+                            uploadStatusImage(res.assets[0]);
+                        }
+                    }
+                },
+                {
+                    text: "Gallery",
+                    onPress: async () => {
+                        const res = await ImagePicker.launchImageLibraryAsync({
+                            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                            quality: 0.8,
+                            allowsEditing: true,
+                            aspect: [9, 16],
+                        });
+                        if (!res.canceled && res.assets[0]) {
+                            uploadStatusImage(res.assets[0]);
+                        }
+                    }
+                },
+                { text: "Cancel", style: "cancel" }
+            ]
+        );
+    };
+
     const handleCreateStatus = async (type = 'text', content = null, color = null) => {
         setUploading(true);
         try {
@@ -543,9 +583,9 @@ export default function CommunityScreen() {
                 setTextStatusVisible(false);
                 setStatusText('');
                 await fetchStatuses(); // Robust: Wait for refresh
-                Alert.alert("Success", "Status uploaded!");
+                Alert.alert("Success", "Story uploaded!");
             }
-        } catch (e) { Alert.alert("Error", "Failed to upload status"); }
+        } catch (e) { Alert.alert("Error", "Failed to upload story"); }
         finally { setUploading(false); }
     };
 
@@ -1159,7 +1199,7 @@ export default function CommunityScreen() {
                             {/* Delete Button (Only for Me) */}
                             {(activeStory?.user?._id === currentUserId || activeStory?.user === currentUserId) && (
                                 <TouchableOpacity onPress={() => {
-                                    Alert.alert("Delete Status", "Are you sure?", [
+                                    Alert.alert("Delete Story", "Are you sure?", [
                                         { text: "Cancel", style: "cancel" },
                                         {
                                             text: "Delete",
@@ -1508,9 +1548,9 @@ export default function CommunityScreen() {
                 <SocialFeed
                     theme={theme}
                     posts={socialPosts}
-                    currentUser={userProfile}
+                    currentUser={{ ...userProfile, _id: currentUserId }}
                     statuses={groupedStatuses}
-                    onCreateStatus={() => setTextStatusVisible(true)}
+                    onCreateStatus={handleCreateStory}
                     onViewStatus={handleViewStatus}
                     onRefresh={onRefresh}
                     refreshing={socialRefreshing}

@@ -206,19 +206,35 @@ export default function GroupChatScreen() {
             case 'copy':
                 await Clipboard.setStringAsync(selectedMessage.content || "");
                 break;
-            case 'delete':
-                Alert.alert("Delete Message", "Delete for everyone?", [
+            case 'delete': {
+                const senderId = String(selectedMessage?.sender?._id || selectedMessage?.sender);
+                const isMe = senderId === String(myId);
+
+                const options = [
                     { text: "Cancel", style: "cancel" },
                     {
-                        text: "Delete",
-                        style: "destructive",
+                        text: "Delete for me",
                         onPress: () => {
-                            socket.emit('deleteMessage', { msgId: selectedMessage._id, chatId: id, isGroup: true });
+                            socket.emit('deleteMessageForMe', { msgId: selectedMessage._id, userId: myId });
                             setMessages(prev => prev.filter(m => m._id !== selectedMessage._id));
                         }
                     }
-                ]);
+                ];
+
+                if (isMe) {
+                    options.push({
+                        text: "Delete for everyone",
+                        style: "destructive",
+                        onPress: () => {
+                            socket.emit('deleteMessage', { msgId: selectedMessage._id, chatId: id, isGroup: true });
+                            // Optimistic update not needed as socket will broadcast
+                        }
+                    });
+                }
+
+                Alert.alert("Delete Message", "Choose an option", options);
                 break;
+            }
             case 'forward':
                 setForwardModalVisible(true);
                 fetchForwardUsers();
@@ -316,7 +332,8 @@ export default function GroupChatScreen() {
             .catch(console.error);
 
         // Fetch Messages
-        fetch(`${BACKEND_URL}/api/auth/chat/group/messages/${id}`)
+        // Fetch Messages
+        fetch(`${BACKEND_URL}/api/auth/chat/group/messages/${id}?userId=${myId}`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) setMessages(data);
@@ -485,15 +502,33 @@ export default function GroupChatScreen() {
     };
 
     const handleDeleteFromViewer = () => {
-        Alert.alert("Delete", "Delete this message?", [
+        const senderId = String(viewerData?.sender?._id || viewerData?.sender);
+        const isMe = senderId === String(myId);
+
+        const options = [
             { text: "Cancel", style: "cancel" },
             {
-                text: "Delete", style: "destructive", onPress: () => {
-                    socket.emit('deleteMessage', { msgId: viewerData._id, userId: myId });
+                text: "Delete for me",
+                onPress: () => {
+                    socket.emit('deleteMessageForMe', { msgId: viewerData._id, userId: myId });
+                    setMessages(prev => prev.filter(m => m._id !== viewerData._id));
                     setViewerVisible(false);
                 }
             }
-        ]);
+        ];
+
+        if (isMe) {
+            options.push({
+                text: "Delete for everyone",
+                style: "destructive",
+                onPress: () => {
+                    socket.emit('deleteMessage', { msgId: viewerData._id, userId: myId });
+                    setViewerVisible(false);
+                }
+            });
+        }
+
+        Alert.alert("Delete", "Choose an option", options);
     };
 
     const handleReplyFromViewer = () => {
@@ -857,7 +892,7 @@ export default function GroupChatScreen() {
                             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                             onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
                             style={{ flex: 1 }}
-                            data={messages}
+                            data={processMessagesWithDates(messages)}
                             keyExtractor={(item, index) => index.toString()}
                             onScrollToIndexFailed={(info) => {
                                 if (flatListRef.current) {
@@ -865,6 +900,17 @@ export default function GroupChatScreen() {
                                 }
                             }}
                             renderItem={({ item, index }) => {
+                                if (item.type === 'date_header') {
+                                    return (
+                                        <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                                            <View style={{ backgroundColor: theme.inputBg, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>
+                                                <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '500' }}>
+                                                    {item.content}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    );
+                                }
                                 const senderId = typeof item.sender === 'object' ? item.sender._id : item.sender;
                                 const isMe = senderId === myId;
                                 const isHighlighted = searchQuery.trim().length > 0 && item.content?.toLowerCase().includes(searchQuery.toLowerCase().trim());

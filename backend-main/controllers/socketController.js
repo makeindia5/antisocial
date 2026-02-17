@@ -183,10 +183,28 @@ exports.init = (server) => {
                     io.to(message.recipient.toString()).emit('messageDeleted', msgId);
                     io.to(message.sender.toString()).emit('messageDeleted', msgId);
                 } else if (message.groupId) {
-                    io.to(message.groupId).emit('messageDeleted', msgId);
+                    io.to(message.groupId === 'finance-gd' ? 'finance-gd' : `group_${message.groupId}`).emit('messageDeleted', msgId);
                 }
             } catch (err) {
                 console.error("Delete error:", err);
+            }
+        });
+
+        socket.on('deleteMessageForMe', async ({ msgId, userId }) => {
+            try {
+                const message = await Message.findById(msgId);
+                if (!message) return;
+
+                // Add to deletedFor if not already there
+                if (!message.deletedFor.includes(userId)) {
+                    message.deletedFor.push(userId);
+                    await message.save();
+                }
+
+                // Notify ONLY the requesting user
+                io.to(userId).emit('messageDeleted', msgId);
+            } catch (err) {
+                console.error("Delete For Me Error:", err);
             }
         });
 
