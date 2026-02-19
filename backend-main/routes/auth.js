@@ -86,6 +86,7 @@ router.post('/devices/remove', authController.removeLinkedDevice);
 // Reel Routes
 router.post('/reels/create', reelController.createReel);
 router.get('/reels/feed', reelController.getReels);
+router.get('/reels/details/:reelId', reelController.getReel);
 router.get('/reels/user/:userId', reelController.getUserReels);
 router.post('/reels/like', reelController.likeReel);
 router.post('/reels/comment', reelController.commentReel);

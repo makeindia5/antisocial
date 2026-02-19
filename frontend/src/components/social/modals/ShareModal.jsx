@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, FlatList, Image, ActivityIndicator, Animated, PanResponder, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, FlatList, Image, ActivityIndicator, Animated, PanResponder, Platform, Share, Clipboard, Linking, Alert, ScrollView } from 'react-native';
+import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import io from 'socket.io-client';
 import { API_BASE } from '../../../services/apiService';
 
@@ -100,6 +102,129 @@ const ShareModal = ({ visible, onClose, currentUser, selectedItem, itemType = 'r
         }
     };
 
+    const handleExternalShare = async (platform) => {
+        let deepLink;
+        let mediaUrl;
+
+        if (itemType === 'reel') {
+            // Use backend redirect URL for sharing (clickable in WhatsApp)
+            const baseUrl = API_BASE.replace('/api/auth', '');
+            deepLink = `${baseUrl}/reel/share/${selectedItem._id}`;
+            mediaUrl = selectedItem.url.startsWith('http') ? selectedItem.url : `${baseUrl}${selectedItem.url}`;
+        } else {
+            mediaUrl = selectedItem.mediaUrl.startsWith('http') ? selectedItem.mediaUrl : `${API_BASE.replace('/api/auth', '')}${selectedItem.mediaUrl}`;
+            deepLink = mediaUrl;
+        }
+
+        const message = `Check out this reel: ${selectedItem.caption || ''}\n${deepLink}`;
+
+        switch (platform) {
+            case 'whatsapp':
+                const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+                Linking.canOpenURL(whatsappUrl).then(supported => {
+                    if (supported) Linking.openURL(whatsappUrl);
+                    else Alert.alert("Error", "WhatsApp is not installed");
+                });
+                break;
+            case 'copy':
+                Clipboard.setString(deepLink);
+                Alert.alert("Link Copied", "Link copied to clipboard");
+                break;
+            case 'system':
+                Share.share({ message });
+                break;
+            case 'story':
+                // Placeholder for add to story
+                Alert.alert("Coming Soon", "Add to story feature is coming soon!");
+                break;
+            case 'messages':
+                // Just close for now, or nav to messages
+                onClose();
+                break;
+            case 'download':
+                downloadReel(mediaUrl);
+                break;
+        }
+    };
+
+    const downloadReel = async (url) => {
+        try {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'Please grant permission to save videos.');
+                return;
+            }
+
+            Alert.alert("Downloading", "Please wait...");
+            const callback = downloadProgress => {
+                const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+                // console.log(progress);
+            };
+
+            const downloadResumable = FileSystem.createDownloadResumable(
+                url,
+                FileSystem.documentDirectory + 'reel_' + Date.now() + '.mp4',
+                {},
+                callback
+            );
+
+            const { uri } = await downloadResumable.downloadAsync();
+            await MediaLibrary.saveToLibraryAsync(uri);
+            Alert.alert("Success", "Reel saved to gallery!");
+        } catch (e) {
+            console.error(e);
+            Alert.alert("Error", "Failed to download reel.");
+        }
+    };
+
+    const renderShareOptions = () => (
+        <View style={styles.shareOptionsContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 10 }}>
+                <TouchableOpacity style={styles.optionItem} onPress={() => handleExternalShare('story')}>
+                    <View style={[styles.optionIconCircle, { backgroundColor: '#333' }]}>
+                        <Ionicons name="add" size={24} color="white" />
+                    </View>
+                    <Text style={styles.optionLabel}>Add to story</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.optionItem} onPress={() => handleExternalShare('whatsapp')}>
+                    <View style={[styles.optionIconCircle, { backgroundColor: '#25D366' }]}>
+                        <Ionicons name="logo-whatsapp" size={24} color="white" />
+                    </View>
+                    <Text style={styles.optionLabel}>WhatsApp</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.optionItem} onPress={() => handleExternalShare('copy')}>
+                    <View style={[styles.optionIconCircle, { backgroundColor: '#333' }]}>
+                        <Ionicons name="link-outline" size={24} color="white" />
+                    </View>
+                    <Text style={styles.optionLabel}>Copy link</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.optionItem} onPress={() => handleExternalShare('download')}>
+                    <View style={[styles.optionIconCircle, { backgroundColor: '#333' }]}>
+                        <Ionicons name="download-outline" size={24} color="white" />
+                    </View>
+                    <Text style={styles.optionLabel}>Download</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.optionItem} onPress={() => handleExternalShare('system')}>
+                    <View style={[styles.optionIconCircle, { backgroundColor: '#333' }]}>
+                        <Ionicons name="share-outline" size={24} color="white" />
+                    </View>
+                    <Text style={styles.optionLabel}>Share to...</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.optionItem} onPress={() => handleExternalShare('messages')}>
+                    <View style={[styles.optionIconCircle, { backgroundColor: '#007AFF' }]}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={24} color="white" />
+                    </View>
+                    <Text style={styles.optionLabel}>Messages</Text>
+                </TouchableOpacity>
+            </ScrollView>
+        </View>
+    );
+
     if (!visible) return null;
 
     return (
@@ -166,6 +291,8 @@ const ShareModal = ({ visible, onClose, currentUser, selectedItem, itemType = 'r
                             contentContainerStyle={{ paddingBottom: 20 }}
                         />
                     )}
+
+                    {renderShareOptions()}
                 </Animated.View>
             </TouchableOpacity>
         </Modal>
@@ -250,6 +377,32 @@ const styles = StyleSheet.create({
     },
     sentButtonText: {
         color: '#8E8E93',
+    },
+
+    shareOptionsContainer: {
+        marginTop: 20,
+        paddingBottom: 20,
+        borderTopWidth: 0.5,
+        borderTopColor: '#3A3A3C',
+        paddingTop: 15,
+    },
+    optionItem: {
+        alignItems: 'center',
+        marginHorizontal: 10,
+        width: 70, // Fixed width for alignment
+    },
+    optionIconCircle: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    optionLabel: {
+        color: 'white',
+        fontSize: 11,
+        textAlign: 'center',
     },
 });
 

@@ -17,7 +17,6 @@ const TABS = {
     social: [
         { key: 'home', label: 'Home', icon: 'home' },
         { key: 'chats', label: 'Chats', icon: 'chatbubbles' },
-        { key: 'create', label: 'Create', icon: 'add-circle' },
         { key: 'reels', label: 'Reels', icon: 'play' },
         { key: 'profile', label: 'Profile', icon: 'person' },
         { key: 'settings', label: 'Menu', icon: 'grid' }

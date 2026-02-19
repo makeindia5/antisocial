@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, RefreshControl, Platform, StatusBar, Image, FlatList, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, Dimensions, StatusBar, SafeAreaView, RefreshControl, Modal, TouchableWithoutFeedback, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, GlobalStyles } from '../../src/styles/theme';
@@ -54,11 +54,28 @@ export default function SocialScreen() {
         } catch (e) { console.error(e); }
     };
 
-    const fetchReels = async () => {
+    const fetchReels = async (isRefresh = false) => {
         try {
-            const res = await fetch(`${API_BASE}/reels/feed`);
+            let url = `${API_BASE}/reels/feed`;
+            if (isRefresh && reels.length > 0) {
+                const existingIds = reels.map(r => r._id).join(',');
+                url += `?exclude=${existingIds}`;
+            }
+
+            const res = await fetch(url);
             const data = await res.json();
-            if (Array.isArray(data)) setReels(data);
+            if (Array.isArray(data)) {
+                if (isRefresh) {
+                    // Prepend new reels or replace? User said "new feed reels not the watch one".
+                    // If we exclude watched ones, we get completely new ones.
+                    // Let's replace the list to give a "fresh" feel, or append if pagination.
+                    // For "Refresh", standard is to reload top. But since we exclude, we just get new ones.
+                    // Use new data.
+                    setReels(data);
+                } else {
+                    setReels(data);
+                }
+            }
         } catch (e) { console.error(e); }
     };
 
@@ -89,7 +106,7 @@ export default function SocialScreen() {
 
     const onRefresh = async () => {
         setRefreshing(true);
-        await Promise.all([fetchFeed(), fetchReels(), fetchStatuses(), fetchExplore(), fetchNotifications()]);
+        await Promise.all([fetchFeed(), fetchReels(true), fetchStatuses(), fetchExplore(), fetchNotifications()]);
         setRefreshing(false);
     };
 
@@ -179,15 +196,51 @@ export default function SocialScreen() {
         </ScrollView>
     );
 
+    const [createMenuVisible, setCreateMenuVisible] = useState(false);
+
+    const renderCreateMenu = () => (
+        <Modal
+            transparent={true}
+            visible={createMenuVisible}
+            onRequestClose={() => setCreateMenuVisible(false)}
+            animationType="fade"
+        >
+            <TouchableWithoutFeedback onPress={() => setCreateMenuVisible(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <View style={[styles.createMenu, { backgroundColor: theme.surface }]}>
+                        <TouchableOpacity style={styles.createMenuItem} onPress={() => { setCreateMenuVisible(false); router.push({ pathname: '/social/create', params: { initialType: 'post' } }); }}>
+                            <Ionicons name="images-outline" size={24} color={theme.textPrimary} />
+                            <Text style={[styles.createMenuText, { color: theme.textPrimary }]}>Post</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.createMenuItem} onPress={() => { setCreateMenuVisible(false); router.push({ pathname: '/social/create', params: { initialType: 'story' } }); }}>
+                            <Ionicons name="add-circle-outline" size={24} color={theme.textPrimary} />
+                            <Text style={[styles.createMenuText, { color: theme.textPrimary }]}>Story</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.createMenuItem} onPress={() => { setCreateMenuVisible(false); router.push({ pathname: '/social/create', params: { initialType: 'reel' } }); }}>
+                            <Ionicons name="videocam-outline" size={24} color={theme.textPrimary} />
+                            <Text style={[styles.createMenuText, { color: theme.textPrimary }]}>Reel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </TouchableWithoutFeedback>
+        </Modal>
+    );
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: activeTab === 'reels' ? '#000' : theme.background }}>
             <StatusBar barStyle={activeTab === 'reels' ? 'light-content' : (theme.name === 'dark' ? 'light-content' : 'dark-content')} />
+            {renderCreateMenu()}
             {/* Header (Only for Home/Profile) */}
             {(activeTab === 'home' || activeTab === 'notifications') && (
                 <View style={[styles.header, { borderBottomWidth: 0.5, borderBottomColor: theme.border }]}>
-                    <Text style={[styles.logo, { color: theme.textPrimary }]}>
-                        {activeTab === 'home' ? 'Intraa' : 'Notifications'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity style={{ marginRight: 15 }} onPress={() => setCreateMenuVisible(true)}>
+                            <Ionicons name="add-circle-outline" size={30} color={theme.textPrimary} />
+                        </TouchableOpacity>
+                        <Text style={[styles.logo, { color: theme.textPrimary }]}>
+                            {activeTab === 'home' ? 'Intraa' : 'Notifications'}
+                        </Text>
+                    </View>
                     {activeTab === 'home' && (
                         <View style={styles.headerIcons}>
                             <TouchableOpacity style={styles.iconBtn} onPress={() => setActiveTab('notifications')}>
@@ -252,7 +305,32 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     iconBtn: {
-        marginLeft: 20,
+        marginLeft: 15,
+    },
+    createMenu: {
+        position: 'absolute',
+        top: 60,
+        left: 10,
+        borderRadius: 10,
+        padding: 10,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        zIndex: 1000,
+        minWidth: 150,
+    },
+    createMenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+    },
+    createMenuText: {
+        marginLeft: 10,
+        fontSize: 16,
+        fontWeight: '500',
     },
     tabBar: {
         flexDirection: 'row',

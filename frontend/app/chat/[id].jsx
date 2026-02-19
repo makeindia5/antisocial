@@ -1148,7 +1148,9 @@ const styles = StyleSheet.create({
     },
     bubbleMe: {
         borderBottomRightRadius: 4,
+        marginRight: 10, // Added to prevent sticking to right edge
     },
+    // }, removed duplicate closing brace
     bubbleOther: {
         borderBottomLeftRadius: 4,
     },

@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity,
     Image, Alert, Modal, ActivityIndicator, TextInput, KeyboardAvoidingView,
     Platform, TouchableWithoutFeedback, Animated, StatusBar, PanResponder,
-    Share, RefreshControl
+    Share, RefreshControl, ScrollView
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { BlurView } from 'expo-blur';
@@ -14,6 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE } from '../../services/apiService';
 import CommentsModal from './modals/CommentsModal';
+import ShareModal from './modals/ShareModal';
 
 const { width, height } = Dimensions.get('window');
 const SCREEN_HEIGHT = height;
@@ -28,45 +29,113 @@ const getVideoUrl = (url) => {
     return `${base}${path}`;
 };
 
-const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpeed, onOpenComments, uiVisible, toggleUi, isCommentsOpen, isHidden, onUndoHide, onShare }) => {
+const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpeed, onOpenComments, uiVisible, toggleUi, isCommentsOpen, isHidden, onUndoHide, onShare, isFullScreen, onToggleFullScreen }) => {
     const video = useRef(null);
+
+    const [isPlaying, setIsPlaying] = useState(true);
+
+    useEffect(() => {
+        let mounted = true;
+
+        const playVideo = async () => {
+            if (isActive && video.current) {
+                try {
+                    await video.current.playAsync();
+                    if (mounted) {
+                        video.current.setRateAsync(playbackSpeed, true);
+                        setIsPlaying(true);
+                    }
+                } catch (e) {
+                    // console.warn("Video play error:", e);
+                }
+            } else if (!isActive && video.current) {
+                try {
+                    await video.current.pauseAsync();
+                } catch (e) { }
+            }
+        };
+
+        playVideo();
+
+        return () => {
+            mounted = false;
+            if (video.current) {
+                video.current.unloadAsync();
+            }
+        };
+    }, [isActive, playbackSpeed]);
 
     useEffect(() => {
         if (isActive) {
-            video.current?.playAsync();
-            video.current?.setRateAsync(playbackSpeed, true);
-        } else {
-            video.current?.pauseAsync();
+            if (isPlaying) {
+                video.current?.playAsync();
+            } else {
+                video.current?.pauseAsync();
+            }
         }
-    }, [isActive, playbackSpeed]);
+    }, [isPlaying, isActive]);
+
+    const handleTap = () => {
+        setIsPlaying(!isPlaying);
+    };
 
     const isLiked = item.likes?.includes(currentUser?._id) || false;
 
     const videoSource = getVideoUrl(item.url);
     console.log(`[ReelItem] user: ${item.user?.name}, source: ${videoSource}`);
 
-    const [statusText, setStatusText] = useState("Initializing...");
+
 
     return (
-        <TouchableWithoutFeedback onPress={toggleUi}>
+        <TouchableWithoutFeedback onPress={handleTap}>
             <View style={[styles.reelContainer, { height: SCREEN_HEIGHT }]}>
-                <View style={{ position: 'absolute', zIndex: 99, top: 100, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10 }}>
-                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Status: {statusText}</Text>
-                    <Text style={{ color: 'yellow', fontSize: 10 }}>URI: {getVideoUrl(item.url)}</Text>
-                </View>
                 <Video
                     ref={video}
                     style={styles.video}
                     source={{ uri: getVideoUrl(item.url) }}
                     resizeMode={ResizeMode.COVER}
                     isLooping
-                    shouldPlay={isActive}
+                    shouldPlay={isActive && isPlaying}
                     rate={playbackSpeed}
-                    useNativeControls={true}
-                    onLoadStart={() => setStatusText("Loading...")}
-                    onLoad={(status) => setStatusText(`Loaded (${status.durationMillis}ms)`)}
-                    onError={(e) => setStatusText(`Error: ${e.error || JSON.stringify(e)}`)}
+                    useNativeControls={false}
+                    posterSource={item.thumbnail ? { uri: getVideoUrl(item.thumbnail) } : null}
+                    posterStyle={{ resizeMode: 'cover' }}
+                    usePoster={true}
+                    onPlaybackStatusUpdate={status => {
+                        if (status.didJustFinish) {
+                            // Loop or auto-scroll logic
+                        }
+                    }}
                 />
+
+                {!isPlaying && (
+                    <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 1 }}>
+                        <Ionicons name="play" size={70} color="rgba(255,255,255,0.7)" />
+                    </View>
+                )}
+
+                {isFullScreen && (
+                    <TouchableOpacity
+                        style={{
+                            position: 'absolute',
+                            bottom: 40,
+                            alignSelf: 'center',
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            paddingVertical: 10,
+                            paddingHorizontal: 20,
+                            borderRadius: 20,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.3)',
+                            zIndex: 2
+                        }}
+                        onPress={onToggleFullScreen}
+                    >
+                        <Ionicons name="resize-outline" size={20} color="white" style={{ marginRight: 8 }} />
+                        <Text style={{ color: 'white', fontWeight: 'bold' }}>Exit Full Screen</Text>
+                    </TouchableOpacity>
+                )}
 
                 {/* Hidden Blur Overlay */}
                 {isHidden && (
@@ -82,8 +151,8 @@ const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpe
                     </BlurView>
                 )}
 
-                {/* Overlay UI - Hidden when uiVisible is false */}
-                {uiVisible && !isHidden && (
+                {/* Overlay UI - Hidden when uiVisible is false OR isFullScreen is true */}
+                {uiVisible && !isHidden && !isFullScreen && (
                     <View style={styles.overlay}>
                         <View style={styles.bottomInfo}>
                             <View style={styles.userInfo}>
@@ -125,7 +194,7 @@ const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpe
     );
 };
 
-const ReelOptionsModal = ({ visible, onClose, onOptionSelect, currentSpeed, isOwner, reelUser, onHide }) => {
+const ReelOptionsModal = ({ visible, onClose, onOptionSelect, currentSpeed, isOwner, reelUser, onHide, isFullScreen }) => {
     const [currentView, setCurrentView] = React.useState('main'); // main, speed, quality, not_interested
     const panY = useRef(new Animated.Value(0)).current;
 
@@ -197,86 +266,88 @@ const ReelOptionsModal = ({ visible, onClose, onOptionSelect, currentSpeed, isOw
             >
                 <View style={styles.grabber} />
             </View>
-            {/* Section 1: Interest */}
-            <View style={styles.menuGroup}>
-                <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('interested')}>
-                    <Ionicons name="add-circle-outline" size={24} color="white" />
-                    <View style={styles.menuTextContainer}>
-                        <Text style={styles.menuTitle}>Interested</Text>
-                        <Text style={styles.menuSubtitle}>More of your reels will be like this.</Text>
-                    </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => setCurrentView('not_interested')}>
-                    <Ionicons name="remove-circle-outline" size={24} color="white" />
-                    <View style={styles.menuTextContainer}>
-                        <Text style={styles.menuTitle}>Not interested</Text>
-                        <Text style={styles.menuSubtitle}>Fewer of your reels will be like this.</Text>
-                    </View>
-                </TouchableOpacity>
-            </View>
-
-            {/* Section 2: Actions */}
-            <View style={styles.menuGroup}>
-                <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('save')}>
-                    <Ionicons name="bookmark-outline" size={24} color="white" />
-                    <View style={styles.menuTextContainer}>
-                        <Text style={styles.menuTitle}>Save reel</Text>
-                        <Text style={styles.menuSubtitle}>Add this to your saved reels.</Text>
-                    </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => setCurrentView('qr')}>
-                    <Ionicons name="qr-code-outline" size={24} color="white" />
-                    <View style={styles.menuTextContainer}>
-                        <Text style={styles.menuTitle}>QR code</Text>
-                        <Text style={styles.menuSubtitle}>Share this reel via QR.</Text>
-                    </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('remix')}>
-                    <Ionicons name="git-compare-outline" size={24} color="#666" />
-                    <View style={styles.menuTextContainer}>
-                        <Text style={[styles.menuTitle, { color: '#666' }]}>Remix this reel</Text>
-                        <Text style={[styles.menuSubtitle, { color: '#666' }]}>Only videos originally created as reels can be remixed.</Text>
-                    </View>
-                </TouchableOpacity>
-            </View>
-
-            {/* Section 3: Owner Actions */}
-            {isOwner && (
+            <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Section 1: Interest */}
                 <View style={styles.menuGroup}>
-                    <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('delete')}>
-                        <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+                    <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('interested')}>
+                        <Ionicons name="add-circle-outline" size={24} color="white" />
                         <View style={styles.menuTextContainer}>
-                            <Text style={[styles.menuTitle, { color: '#FF3B30' }]}>Delete</Text>
-                            <Text style={styles.menuSubtitle}>Permanently remove this reel.</Text>
+                            <Text style={styles.menuTitle}>Interested</Text>
+                            <Text style={styles.menuSubtitle}>More of your reels will be like this.</Text>
+                        </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => setCurrentView('not_interested')}>
+                        <Ionicons name="remove-circle-outline" size={24} color="white" />
+                        <View style={styles.menuTextContainer}>
+                            <Text style={styles.menuTitle}>Not interested</Text>
+                            <Text style={styles.menuSubtitle}>Fewer of your reels will be like this.</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
-            )}
 
-            {/* Section 4: Settings */}
-            <View style={styles.menuGroup}>
-                <TouchableOpacity style={styles.menuItem} onPress={() => setCurrentView('speed')}>
-                    <Ionicons name="speedometer-outline" size={24} color="white" />
-                    <View style={styles.menuTextContainer}>
-                        <Text style={styles.menuTitle}>Playback speed</Text>
-                        <Text style={styles.menuSubtitle}>{getSpeedLabel(currentSpeed)}</Text>
+                {/* Section 2: Actions */}
+                <View style={styles.menuGroup}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('save')}>
+                        <Ionicons name="bookmark-outline" size={24} color="white" />
+                        <View style={styles.menuTextContainer}>
+                            <Text style={styles.menuTitle}>Save reel</Text>
+                            <Text style={styles.menuSubtitle}>Add this to your saved reels.</Text>
+                        </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => setCurrentView('qr')}>
+                        <Ionicons name="qr-code-outline" size={24} color="white" />
+                        <View style={styles.menuTextContainer}>
+                            <Text style={styles.menuTitle}>QR code</Text>
+                            <Text style={styles.menuSubtitle}>Share this reel via QR.</Text>
+                        </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('remix')}>
+                        <Ionicons name="git-compare-outline" size={24} color="#666" />
+                        <View style={styles.menuTextContainer}>
+                            <Text style={[styles.menuTitle, { color: '#666' }]}>Remix this reel</Text>
+                            <Text style={[styles.menuSubtitle, { color: '#666' }]}>Only videos originally created as reels can be remixed.</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Section 3: Owner Actions */}
+                {isOwner && (
+                    <View style={styles.menuGroup}>
+                        <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('delete')}>
+                            <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+                            <View style={styles.menuTextContainer}>
+                                <Text style={[styles.menuTitle, { color: '#FF3B30' }]}>Delete</Text>
+                                <Text style={styles.menuSubtitle}>Permanently remove this reel.</Text>
+                            </View>
+                        </TouchableOpacity>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => setCurrentView('quality')}>
-                    <Ionicons name="settings-outline" size={24} color="white" />
-                    <View style={styles.menuTextContainer}>
-                        <Text style={styles.menuTitle}>Quality settings</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('full_screen')}>
-                    <Ionicons name="scan-outline" size={24} color="white" />
-                    <View style={styles.menuTextContainer}>
-                        <Text style={styles.menuTitle}>Full screen</Text>
-                    </View>
-                </TouchableOpacity>
-            </View>
+                )}
+
+                {/* Section 4: Settings */}
+                <View style={styles.menuGroup}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => setCurrentView('speed')}>
+                        <Ionicons name="speedometer-outline" size={24} color="white" />
+                        <View style={styles.menuTextContainer}>
+                            <Text style={styles.menuTitle}>Playback speed</Text>
+                            <Text style={styles.menuSubtitle}>{getSpeedLabel(currentSpeed)}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => setCurrentView('quality')}>
+                        <Ionicons name="settings-outline" size={24} color="white" />
+                        <View style={styles.menuTextContainer}>
+                            <Text style={styles.menuTitle}>Quality settings</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => onOptionSelect('full_screen')}>
+                        <Ionicons name={isFullScreen ? "resize-outline" : "scan-outline"} size={24} color="white" />
+                        <View style={styles.menuTextContainer}>
+                            <Text style={styles.menuTitle}>{isFullScreen ? "Exit full screen" : "Full screen"}</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
         </>
     );
 
@@ -357,17 +428,18 @@ const ReelOptionsModal = ({ visible, onClose, onOptionSelect, currentSpeed, isOw
     );
 };
 
-const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
-    const [reels, setReels] = useState([]);
+const ReelsView = ({ theme, onFullScreenChange, refreshTrigger, reels = [], onRefresh, refreshing, isFullScreen }) => {
     const [activeIndex, setActiveIndex] = useState(0);
-    const [refreshing, setRefreshing] = useState(false);
     const [uiVisible, setUiVisible] = useState(true);
     const [isCommentsOpen, setIsCommentsOpen] = useState(false);
     const [selectedReel, setSelectedReel] = useState(null);
     const [menuVisible, setMenuVisible] = useState(false);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
-    const [hiddenReelIds, setHiddenReelIds] = useState([]);
+    const [shareModalVisible, setShareModalVisible] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
+    const [hiddenReelIds, setHiddenReelIds] = useState([]);
+
+    console.log("[ReelsView] Received reels:", reels?.length, reels && reels.length > 0 ? reels[0] : "Empty");
 
     const socket = useRef(null);
 
@@ -377,43 +449,27 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
             setCurrentUser({ _id: uid });
         };
         loadUser();
-        fetchReels();
 
         // Socket integration
         socket.current = io(API_BASE.replace('/api/auth', ''));
         return () => socket.current?.disconnect();
     }, []);
 
-    useEffect(() => {
-        if (refreshTrigger) fetchReels();
-    }, [refreshTrigger]);
-
-    const fetchReels = async () => {
-        try {
-            setRefreshing(true);
-            const res = await fetch(`${API_BASE}/posts/explore`);
-            const data = await res.json();
-            // Filter only videos for reels view
-            const videos = Array.isArray(data) ? data.filter(post => post.type === 'video') : [];
-            setReels(videos);
-        } catch (e) {
-            console.error("Fetch reels error:", e);
-        } finally {
-            setRefreshing(false);
-        }
-    };
-
-    const handleLike = async (postId) => {
+    const handleLike = async (reelId) => {
         try {
             const userId = await AsyncStorage.getItem('userId');
-            const res = await fetch(`${API_BASE}/posts/like`, {
+            const res = await fetch(`${API_BASE}/reels/like`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ postId, userId })
+                body: JSON.stringify({ reelId, userId })
             });
             const data = await res.json();
             if (data.success) {
-                setReels(prev => prev.map(r => r._id === postId ? { ...r, likes: data.likes } : r));
+                // We need to update the parent state or local if we had one. 
+                // Since reels come from props, we might need a way to update them.
+                // For now, let's trigger a refresh if possible, or we might need to lift state up fully.
+                // Ideally, SocialScreen should handle the update, but for now we rely on onRefresh.
+                if (onRefresh) onRefresh();
             }
         } catch (e) {
             console.error(e);
@@ -432,12 +488,12 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
     }).current;
 
     const viewabilityConfig = useRef({
-        itemVisiblePercentThreshold: 50
+        itemVisiblePercentThreshold: 80 // Increased to ensure focus before playing
     }).current;
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="black" />
+            <StatusBar barStyle="light-content" backgroundColor="black" hidden={isFullScreen} />
             <FlatList
                 data={reels}
                 keyExtractor={item => item._id}
@@ -455,7 +511,9 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
                         isCommentsOpen={isCommentsOpen}
                         isHidden={hiddenReelIds.includes(item._id)}
                         onUndoHide={() => setHiddenReelIds(prev => prev.filter(id => id !== item._id))}
-                        onShare={() => Share.share({ message: `Check out this reel: ${item.caption} ${item.url}` })}
+                        onShare={() => { setSelectedReel(item); setShareModalVisible(true); }}
+                        isFullScreen={isFullScreen}
+                        onToggleFullScreen={() => onFullScreenChange()}
                     />
                 )}
                 pagingEnabled
@@ -466,12 +524,20 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={viewabilityConfig}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={fetchReels} tintColor="white" />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="white" />
                 }
                 removeClippedSubviews={true}
                 maxToRenderPerBatch={3}
                 windowSize={5}
                 initialNumToRender={1}
+                ListEmptyComponent={
+                    <View style={{ height: SCREEN_HEIGHT, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: 'white', fontSize: 18 }}>No reels found</Text>
+                        <TouchableOpacity onPress={onRefresh} style={{ marginTop: 20, padding: 10, backgroundColor: '#333', borderRadius: 5 }}>
+                            <Text style={{ color: 'white' }}>Refresh</Text>
+                        </TouchableOpacity>
+                    </View>
+                }
             />
 
             <ReelOptionsModal
@@ -480,6 +546,7 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
                 currentSpeed={playbackSpeed}
                 isOwner={selectedReel?.user?._id === currentUser?._id}
                 reelUser={selectedReel?.user}
+                isFullScreen={isFullScreen}
                 onOptionSelect={(opt) => {
                     if (typeof opt === 'object') {
                         if (opt.type === 'playback speed') setPlaybackSpeed(parseFloat(opt.value));
@@ -490,20 +557,24 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
                         Alert.alert("Delete Reel", "Are you sure?", [
                             { text: "Cancel" },
                             {
+
                                 text: "Delete", style: 'destructive', onPress: async () => {
                                     const userId = await AsyncStorage.getItem('userId');
-                                    const res = await fetch(`${API_BASE}/posts/delete`, {
+                                    const res = await fetch(`${API_BASE}/reels/delete`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ postId: selectedReel._id, userId })
+                                        body: JSON.stringify({ reelId: selectedReel._id, userId })
                                     });
                                     if (res.ok) {
-                                        setReels(prev => prev.filter(r => r._id !== selectedReel._id));
+                                        if (onRefresh) onRefresh();
                                         setMenuVisible(false);
                                     }
                                 }
                             }
                         ]);
+                    } else if (opt === 'full_screen') {
+                        if (onFullScreenChange) onFullScreenChange();
+                        setMenuVisible(false);
                     }
                 }}
                 onHide={() => {
@@ -514,13 +585,23 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
                 }}
             />
 
+            <ShareModal
+                visible={shareModalVisible}
+                onClose={() => setShareModalVisible(false)}
+                currentUser={currentUser}
+                selectedItem={selectedReel}
+                itemType="reel"
+            />
+
             {/* Header Title */}
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Reels</Text>
-                <TouchableOpacity onPress={() => fetchReels()}>
-                    <Ionicons name="camera-outline" size={28} color="white" />
-                </TouchableOpacity>
-            </View>
+            {!isFullScreen && (
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>Reels</Text>
+                    <TouchableOpacity onPress={() => onRefresh && onRefresh()}>
+                        <Ionicons name="refresh-outline" size={28} color="white" />
+                    </TouchableOpacity>
+                </View>
+            )}
 
             <CommentsModal
                 visible={isCommentsOpen}
@@ -548,7 +629,7 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger }) => {
 
                         const data = await res.json();
                         if (data.success) {
-                            setReels(prev => prev.map(r => r._id === selectedReel._id ? { ...r, comments: data.comments } : r));
+                            if (onRefresh) onRefresh();
                             setSelectedReel(prev => ({ ...prev, comments: data.comments }));
                         }
                     } catch (e) {
@@ -577,11 +658,11 @@ const styles = StyleSheet.create({
     video: {
         width: '100%',
         height: '100%',
-        backgroundColor: 'red', // DEBUG: Visible if video fails to load
+        backgroundColor: 'black', // DEBUG: Visible if video fails to load
     },
     overlay: {
         position: 'absolute',
-        bottom: 40, // Reduced to move caption down
+        bottom: 90, // Increased to avoid overlap with BottomNavBar
         left: 0,
         right: 0,
         flexDirection: 'row',

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Image, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,11 +9,12 @@ import { useTheme } from '../../src/context/ThemeContext';
 
 export default function CreateSocialScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams();
     const { colors: theme } = useTheme();
     const [media, setMedia] = useState(null);
     const [caption, setCaption] = useState('');
     const [type, setType] = useState('image'); // image, video
-    const [uploadType, setUploadType] = useState('post'); // post, story, reel
+    const [uploadType, setUploadType] = useState(params.initialType || 'post'); // post, story, reel
     const [loading, setLoading] = useState(false);
 
     const pickMedia = async () => {
@@ -88,6 +89,12 @@ export default function CreateSocialScreen() {
             setLoading(false);
         }
     };
+
+    React.useEffect(() => {
+        if (params.initialType) {
+            setUploadType(params.initialType);
+        }
+    }, [params.initialType]);
 
     return (
         <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>

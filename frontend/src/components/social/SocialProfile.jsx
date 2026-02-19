@@ -820,6 +820,7 @@ const styles = StyleSheet.create({
     gridImage: {
         width: '100%',
         height: '100%',
+        backgroundColor: '#2C2C2E', // Placeholder color if image fails
     },
     // Modal & Comment Styles
     commentOverlay: {

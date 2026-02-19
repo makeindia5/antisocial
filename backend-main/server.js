@@ -16,6 +16,7 @@ app.use(express.json());
 app.use(express.static("public"));
 app.use('/uploads', express.static('uploads'));
 
+app.use("/", require("./routes/public"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/gd", require("./routes/gd"));
 app.use("/api/admin", require("./routes/admin"));

@@ -100,6 +100,7 @@ export const SocketProvider = ({ children }) => {
         return () => {
             if (socket.current) {
                 console.log("Disconnecting Global Socket");
+                socket.current.removeAllListeners();
                 socket.current.disconnect();
             }
         };

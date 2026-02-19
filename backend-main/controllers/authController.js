@@ -101,11 +101,8 @@ const getPrivateSummary = async (req, res) => {
       $or: [
         { sender: user1, recipient: user2 },
         { sender: user2, recipient: user1 }
-      $or: [
-          { sender: user1, recipient: user2 },
-          { sender: user2, recipient: user1 }
-        ],
-        deletedFor: { $ne: req.query.myId } // Exclude messages deleted for this user
+      ],
+      deletedFor: { $ne: req.query.myId } // Exclude messages deleted for this user
     }).sort({ createdAt: -1 }).limit(50).populate('sender', 'name');
 
     if (messages.length === 0) return res.json({ summary: "No conversation history." });

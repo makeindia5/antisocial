@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, Alert, Animated, Image, TouchableOpacity, ScrollView, Easing, KeyboardAvoidingView, Platform, RefreshControl, ActivityIndicator, Dimensions, FlatList, PanResponder, StatusBar, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, TextInput, Alert, Animated, Image, TouchableOpacity, ScrollView, Easing, KeyboardAvoidingView, Platform, RefreshControl, ActivityIndicator, Dimensions, FlatList, PanResponder, StatusBar, useWindowDimensions, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -63,6 +63,7 @@ export default function CommunityScreen() {
     const [deletedChatIds, setDeletedChatIds] = useState([]);
     const [blockedUserIds, setBlockedUserIds] = useState([]);
     const [isSearchVisible, setIsSearchVisible] = useState(false);
+    const [createMenuVisible, setCreateMenuVisible] = useState(false);
 
     // Clear search when switching modes
     useEffect(() => {
@@ -145,6 +146,8 @@ export default function CommunityScreen() {
     const [socialPosts, setSocialPosts] = useState([]);
     const [explorePosts, setExplorePosts] = useState([]);
     const [socialRefreshing, setSocialRefreshing] = useState(false);
+    const [reels, setReels] = useState([]);
+    const [isFullScreen, setIsFullScreen] = useState(false);
 
 
 
@@ -283,6 +286,16 @@ export default function CommunityScreen() {
         } catch (e) { console.error("Fetch Communities Error:", e); }
     };
 
+    const fetchReels = async () => {
+        try {
+            const res = await fetch(`${SERVER_URL}/api/auth/reels/feed`);
+            if (res.ok) {
+                const data = await res.json();
+                setReels(data);
+            }
+        } catch (e) { console.error("Fetch Reels Error:", e); }
+    };
+
     // --- Logic ---
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -292,7 +305,12 @@ export default function CommunityScreen() {
         await fetchCommunities();
         if (activeMode === 'work') await fetchMeetings();
         if (activeMode === 'work') await fetchMeetings();
-        if (activeMode === 'social') await fetchSocialPosts();
+        if (activeMode === 'social') {
+            await Promise.all([
+                fetchSocialPosts(),
+                fetchReels()
+            ]);
+        }
         await fetchArchivedChats();
         await fetchDeletedChats();
         await fetchBlockedUsers();
@@ -319,6 +337,7 @@ export default function CommunityScreen() {
                 fetchSocialPosts();
                 fetchStatuses();
                 fetchExplorePosts();
+                fetchReels();
             }
         }, [activeMode])
     );
@@ -994,6 +1013,70 @@ export default function CommunityScreen() {
         </Modal>
     );
 
+    const renderCreateMenu = () => {
+        const scaleAnim = React.useRef(new Animated.Value(0)).current;
+
+        React.useEffect(() => {
+            if (createMenuVisible) {
+                Animated.spring(scaleAnim, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    tension: 50,
+                    friction: 7
+                }).start();
+            } else {
+                scaleAnim.setValue(0);
+            }
+        }, [createMenuVisible]);
+
+        return (
+            <Modal
+                transparent={true}
+                visible={createMenuVisible}
+                onRequestClose={() => setCreateMenuVisible(false)}
+                animationType="none" // We handle animation manually
+            >
+                <TouchableWithoutFeedback onPress={() => setCreateMenuVisible(false)}>
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                        <Animated.View style={{
+                            position: 'absolute',
+                            top: 60,
+                            left: 10,
+                            backgroundColor: theme.surface,
+                            borderRadius: 10,
+                            padding: 10,
+                            elevation: 5,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 3.84,
+                            minWidth: 150,
+                            transform: [{ scale: scaleAnim }],
+                            opacity: scaleAnim
+                        }}>
+                            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 10 }} onPress={() => { setCreateMenuVisible(false); router.push({ pathname: '/social/create', params: { initialType: 'post' } }); }}>
+                                <Ionicons name="images-outline" size={24} color={theme.textPrimary} />
+                                <Text style={{ marginLeft: 10, fontSize: 16, fontWeight: '500', color: theme.textPrimary }}>Post</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 10 }} onPress={() => { setCreateMenuVisible(false); router.push({ pathname: '/social/create', params: { initialType: 'story' } }); }}>
+                                <Ionicons name="add-circle-outline" size={24} color={theme.textPrimary} />
+                                <Text style={{ marginLeft: 10, fontSize: 16, fontWeight: '500', color: theme.textPrimary }}>Story</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 10 }} onPress={() => { setCreateMenuVisible(false); router.push({ pathname: '/social/create', params: { initialType: 'reel' } }); }}>
+                                <Ionicons name="videocam-outline" size={24} color={theme.textPrimary} />
+                                <Text style={{ marginLeft: 10, fontSize: 16, fontWeight: '500', color: theme.textPrimary }}>Reel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 10 }} onPress={() => { setCreateMenuVisible(false); router.push({ pathname: '/social/create', params: { initialType: 'camera' } }); }}>
+                                <Ionicons name="camera-outline" size={24} color={theme.textPrimary} />
+                                <Text style={{ marginLeft: 10, fontSize: 16, fontWeight: '500', color: theme.textPrimary }}>Camera</Text>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </View>
+                </TouchableWithoutFeedback>
+            </Modal>
+        );
+    };
+
     const renderHeaderContent = () => {
         const getTitleStyle = () => {
             switch (activeMode) {
@@ -1023,6 +1106,8 @@ export default function CommunityScreen() {
 
         // Ensure Title stays visible (no fade out)
 
+
+
         return (
             <Animated.View style={{ height: headerHeight, overflow: 'hidden', paddingHorizontal: 16 }}>
                 {/* Top Row: Menu | Title | Search Icon */}
@@ -1038,8 +1123,8 @@ export default function CommunityScreen() {
                         </Text>
                     ) : (
                         <>
-                            <TouchableOpacity onPress={() => setShowSidebar(true)} style={{ width: 40, zIndex: 10 }}>
-                                <Ionicons name="menu" size={28} color="white" />
+                            <TouchableOpacity onPress={() => setCreateMenuVisible(true)} style={{ width: 40, zIndex: 10 }}>
+                                <Ionicons name="add" size={30} color="white" />
                             </TouchableOpacity>
 
                             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -1242,6 +1327,7 @@ export default function CommunityScreen() {
             </Modal>
 
             {renderViewerModal()}
+            {renderCreateMenu()}
             {renderSearchResults()}
             {renderTextStatusCreator()}
             {renderGroupCreationModal()}
@@ -1579,7 +1665,7 @@ export default function CommunityScreen() {
                 />
             );
         }
-        if (activeMode === 'social' && activeTab === 'reels') return <ReelsView theme={theme} onFullScreenChange={() => { }} refreshTrigger={refreshing} />;
+        if (activeMode === 'social' && activeTab === 'reels') return <ReelsView theme={theme} onFullScreenChange={() => setIsFullScreen(!isFullScreen)} isFullScreen={isFullScreen} refreshTrigger={refreshing} reels={reels} onRefresh={fetchReels} refreshing={refreshing} />;
         if (activeMode === 'social' && activeTab === 'profile') return <SocialProfile theme={theme} userId={currentUserId || 'check_auth'} isOwnProfile={true} />;
 
         return null;
