@@ -55,4 +55,6 @@ app.post("/verify-otp", (req, res) => {
   res.status(400).json({ success: false, error: "Invalid OTP" });
 });
 
+app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
+
 app.listen(5001, '0.0.0.0', () => console.log("OTP Server on 5001"));

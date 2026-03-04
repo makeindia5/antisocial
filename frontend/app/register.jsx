@@ -35,7 +35,7 @@ export default function RegisterScreen() {
         });
     };
 
-    const isFormValid = Object.values(validations).every(Boolean) && email && password;
+    const isFormValid = Object.values(validations).every(Boolean) && email && password && phoneNumber;
 
     const handleSignup = async () => {
         if (!Object.values(validations).every(Boolean)) {
@@ -137,9 +137,9 @@ export default function RegisterScreen() {
                                     </View>
                                 </View>
 
-                                {/* Phone Number (Optional) */}
+                                {/* Phone Number */}
                                 <View>
-                                    <Text style={[styles.label, { color: theme.textPrimary }]}>Phone (Optional)</Text>
+                                    <Text style={[styles.label, { color: theme.textPrimary }]}>Phone <Text style={{ color: 'red' }}>*</Text></Text>
                                     <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                                         <Ionicons name="call-outline" size={20} color={theme.textSecondary} style={{ marginRight: 10 }} />
                                         <TextInput

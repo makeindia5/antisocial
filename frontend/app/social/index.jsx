@@ -130,7 +130,7 @@ export default function SocialScreen() {
                             <Ionicons name="search" size={20} color={theme.textSecondary} />
                             <Text style={{ marginLeft: 10, color: theme.textSecondary }}>Search</Text>
                         </View>
-                        <ExploreGrid theme={theme} posts={explorePosts} />
+                        <ExploreGrid theme={theme} posts={explorePosts} refreshing={refreshing} onRefresh={onRefresh} />
                     </View>
                 );
             case 'reels':
@@ -148,6 +148,7 @@ export default function SocialScreen() {
                         user={currentUser}
                         isOwnProfile={true}
                         theme={theme}
+                        statuses={statuses}
                     />
                 );
             case 'notifications':
@@ -158,7 +159,13 @@ export default function SocialScreen() {
                         renderItem={({ item }) => (
                             <TouchableOpacity style={styles.notifItem}>
                                 <View style={styles.notifAvatarContainer}>
-                                    <Image source={{ uri: `${SERVER_ROOT}${item.sender?.profilePic}` }} style={styles.notifAvatar} />
+                                    {item.sender?.profilePic ? (
+                                        <Image source={{ uri: `${SERVER_ROOT}${item.sender.profilePic}` }} style={styles.notifAvatar} />
+                                    ) : (
+                                        <View style={[styles.notifAvatar, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
+                                            <Ionicons name="person" size={24} color="#8E8E93" />
+                                        </View>
+                                    )}
                                 </View>
                                 <Text style={{ color: theme.textPrimary, flex: 1, fontSize: 13 }}>
                                     <Text style={{ fontWeight: 'bold' }}>{item.sender?.name}</Text>
@@ -183,8 +190,10 @@ export default function SocialScreen() {
         }
     };
 
-    const ExploreGrid = ({ theme, posts }) => (
-        <ScrollView>
+    const ExploreGrid = ({ theme, posts, refreshing, onRefresh }) => (
+        <ScrollView
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                 {posts.map((post, i) => (
                     <TouchableOpacity key={i} style={{ width: '33.33%', height: 120, padding: 1 }}>

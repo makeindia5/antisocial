@@ -49,8 +49,8 @@ export default function StoryBar({ theme, statuses = [], onCreateStatus, onViewS
                             {currentUser?.profilePic ? (
                                 <Image source={{ uri: currentUser.profilePic.startsWith('http') ? currentUser.profilePic : `${SERVER_ROOT}${currentUser.profilePic}` }} style={styles.avatar} />
                             ) : (
-                                <View style={[styles.avatar, { backgroundColor: theme.inputBg, justifyContent: 'center', alignItems: 'center' }]}>
-                                    <Ionicons name="person" size={30} color={theme.textSecondary} />
+                                <View style={[styles.avatar, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
+                                    <Ionicons name="person" size={40} color="#8E8E93" />
                                 </View>
                             )}
                             <TouchableOpacity
@@ -82,7 +82,9 @@ export default function StoryBar({ theme, statuses = [], onCreateStatus, onViewS
                                 {group.user.profilePic ? (
                                     <Image source={{ uri: group.user.profilePic.startsWith('http') ? group.user.profilePic : `${SERVER_ROOT}${group.user.profilePic}` }} style={styles.avatar} />
                                 ) : (
-                                    <View style={[styles.avatar, { backgroundColor: theme.inputBg }]} />
+                                    <View style={[styles.avatar, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
+                                        <Ionicons name="person" size={40} color="#8E8E93" />
+                                    </View>
                                 )}
                             </View>
                         </View>

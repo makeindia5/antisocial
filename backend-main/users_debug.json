@@ -1,0 +1,86 @@
+[
+  {
+    "_id": "695393bd019811b6a482b8dc",
+    "name": "Vinayak",
+    "email": "vinayaksathisan20@gmail.com",
+    "role": "admin"
+  },
+  {
+    "_id": "6955019e07d1b90528d19ca3",
+    "name": "Sabareenadh ",
+    "email": "rajeshsabareenadh@gmail.com",
+    "role": "user"
+  },
+  {
+    "_id": "6955023507d1b90528d19cab",
+    "name": "Aayush ",
+    "email": "aayushmali224@gmail.com",
+    "role": "user",
+    "phoneNumber": ""
+  },
+  {
+    "_id": "6958dc92103f6fa38ea0d4cc",
+    "name": "demo",
+    "email": "aayushmali0000@gmail.com",
+    "role": "user"
+  },
+  {
+    "_id": "695b54f52d88db5bcdde7022",
+    "name": "Aayu@1234",
+    "email": "mdhole22it@student.mes.ac.in",
+    "role": "user"
+  },
+  {
+    "_id": "695cb242e260db9be1dfc078",
+    "name": "Vampire@2",
+    "email": "adityakumarvijaypatil@gmail.com",
+    "role": "user"
+  },
+  {
+    "_id": "695cb2b3e260db9be1dfc099",
+    "name": "Blaster@2004",
+    "email": "ayushpatil1364@gmail.com",
+    "role": "user"
+  },
+  {
+    "_id": "695f5da255eeb1a6eb2a7767",
+    "name": "Abhay@2004",
+    "email": "abhay.thazhakode@gmail.com",
+    "role": "user"
+  },
+  {
+    "_id": "696622207ee0858b55009e04",
+    "name": "Ayush@1364",
+    "email": "apatil22ecs@student.mes.ac.in",
+    "role": "user",
+    "phoneNumber": ""
+  },
+  {
+    "_id": "6971c669cc00c830493e8e62",
+    "name": "Hike Official",
+    "email": "bot@hikefinance.com",
+    "role": "admin",
+    "phoneNumber": ""
+  },
+  {
+    "_id": "6989b8dc05b0969fc33d0b6b",
+    "name": "Axxxxxx987@",
+    "email": "harishnair3107@gmail.com",
+    "role": "user",
+    "phoneNumber": ""
+  },
+  {
+    "_id": "69942f1334daf49be34229a3",
+    "name": "Dambu_4?",
+    "email": "boneswolf18@gmail.com",
+    "role": "user",
+    "phoneNumber": "8450906057"
+  },
+  {
+    "_id": "6996c5b82763f9a063a249ab",
+    "name": "Sshhaam_8?",
+    "email": "sabareep22comp@student.mes.ac.in",
+    "role": "user",
+    "phoneNumber": ""
+  }
+]

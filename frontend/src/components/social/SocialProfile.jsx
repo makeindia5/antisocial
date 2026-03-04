@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, FlatList, Dimensions, ScrollView, Modal, Alert, TextInput, KeyboardAvoidingView, Platform, Animated, PanResponder, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, FlatList, Dimensions, ScrollView, Modal, Alert, TextInput, KeyboardAvoidingView, Platform, Animated, PanResponder, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE } from '../../services/apiService';
+import { useRouter } from 'expo-router';
 import { useSocket } from '../../context/SocketContext';
 import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +12,7 @@ import io from 'socket.io-client';
 import PostItem from './PostItem';
 import ShareModal from './modals/ShareModal';
 import CommentsModal from './modals/CommentsModal';
+import EditProfileModal from './modals/EditProfileModal';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const COLUMN_COUNT = 3;
@@ -22,8 +24,16 @@ const MOCK_PROFILE_POSTS = Array.from({ length: 12 }).map((_, i) => ({
     url: `https://picsum.photos/300/300?random=${i + 10}`
 }));
 
-export default function SocialProfile({ theme, onCreateStatus, onCreateReel, refreshTrigger }) {
+export default function SocialProfile({ theme, onCreateStatus, onCreateReel, statuses = [], onViewStatus, refreshTrigger }) {
+    const router = useRouter();
     const { userProfile } = useSocket();
+
+    const isAllViewed = (group, uid) => {
+        if (!group || !group.items || group.items.length === 0) return true;
+        return group.items.every(item =>
+            item.viewers && item.viewers.some(v => String(v.user?._id || v.user) === String(uid))
+        );
+    };
     const [activeTab, setActiveTab] = useState('grid');
     const [myReels, setMyReels] = useState([]);
     const [settingsVisible, setSettingsVisible] = useState(false);
@@ -31,6 +41,19 @@ export default function SocialProfile({ theme, onCreateStatus, onCreateReel, ref
     const [user, setUser] = useState({ name: userProfile.name, profilePic: userProfile.profilePic });
     const [currentUserId, setCurrentUserId] = useState(null);
     const [createMenuVisible, setCreateMenuVisible] = useState(false);
+    const [editProfileVisible, setEditProfileVisible] = useState(false);
+
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await Promise.all([
+            loadUserProfile(),
+            fetchMyReels(),
+            fetchMyPosts()
+        ]);
+        setRefreshing(false);
+    };
 
     // Preview Modal State
     const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -215,21 +238,42 @@ export default function SocialProfile({ theme, onCreateStatus, onCreateReel, ref
 
             {/* Profile Info Row */}
             <View style={styles.profileInfoRow}>
-                <View style={styles.avatarWrapper}>
-                    <LinearGradient
-                        colors={['#feda75', '#fa7e1e', '#d62976', '#962fbf', '#4f5bd5']}
-                        style={styles.avatarGradient}
-                    />
+                <TouchableOpacity
+                    style={styles.avatarWrapper}
+                    onPress={() => {
+                        const myStory = statuses.find(g => String(g.user?._id || g.user) === String(currentUserId));
+                        if (myStory) {
+                            if (onViewStatus) onViewStatus(myStory);
+                        } else {
+                            if (onCreateStatus) onCreateStatus();
+                        }
+                    }}
+                >
+                    {(() => {
+                        const myStory = statuses.find(g => String(g.user?._id || g.user) === String(currentUserId));
+                        if (myStory) {
+                            if (isAllViewed(myStory, currentUserId)) {
+                                return <View style={[styles.avatarGradient, { borderWidth: 2, borderColor: theme.border || '#ccc', backgroundColor: 'transparent' }]} />;
+                            } else {
+                                return <LinearGradient
+                                    colors={['#feda75', '#fa7e1e', '#d62976', '#962fbf', '#4f5bd5']}
+                                    style={styles.avatarGradient}
+                                />;
+                            }
+                        }
+                        return null;
+                    })()}
+
                     <View style={[styles.avatarContainer, { backgroundColor: theme.surface }]}>
                         {user.profilePic ? (
                             <Image source={{ uri: `${SERVER_ROOT}${user.profilePic}` }} style={styles.avatar} />
                         ) : (
-                            <View style={[styles.avatar, { backgroundColor: theme.inputBg, justifyContent: 'center', alignItems: 'center' }]}>
-                                <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.textSecondary }}>{user.name?.[0]?.toUpperCase()}</Text>
+                            <View style={[styles.avatar, { backgroundColor: theme.border, justifyContent: 'center', alignItems: 'center' }]}>
+                                <Ionicons name="person" size={40} color={theme.textSecondary} />
                             </View>
                         )}
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.statsContainer}>
                     <View style={styles.statItem}>
@@ -262,7 +306,7 @@ export default function SocialProfile({ theme, onCreateStatus, onCreateReel, ref
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
-                <TouchableOpacity style={[styles.mainBtn, { backgroundColor: theme.inputBg }]}>
+                <TouchableOpacity style={[styles.mainBtn, { backgroundColor: theme.inputBg }]} onPress={() => setEditProfileVisible(true)}>
                     <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Edit profile</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.mainBtn, { backgroundColor: theme.inputBg }]}>
@@ -290,6 +334,7 @@ export default function SocialProfile({ theme, onCreateStatus, onCreateReel, ref
     return (
         <View style={[styles.container, { backgroundColor: theme.surface }]}>
             <FlatList
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                 data={activeTab === 'grid' ? myPosts : (activeTab === 'reels' ? myReels : [])}
                 keyExtractor={item => item.id || item._id}
                 numColumns={3}
@@ -375,7 +420,7 @@ export default function SocialProfile({ theme, onCreateStatus, onCreateReel, ref
                             style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: theme.border }}
                             onPress={() => {
                                 setCreateMenuVisible(false);
-                                if (onCreateStatus) onCreateStatus();
+                                router.push({ pathname: '/social/create', params: { initialType: 'post' } });
                             }}
                         >
                             <Ionicons name="images-outline" size={24} color={theme.textPrimary} style={{ marginRight: 15 }} />
@@ -386,7 +431,7 @@ export default function SocialProfile({ theme, onCreateStatus, onCreateReel, ref
                             style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: theme.border }}
                             onPress={() => {
                                 setCreateMenuVisible(false);
-                                if (onCreateReel) onCreateReel();
+                                router.push({ pathname: '/social/create', params: { initialType: 'reel' } });
                             }}
                         >
                             <Ionicons name="videocam-outline" size={24} color={theme.textPrimary} style={{ marginRight: 15 }} />
@@ -462,7 +507,7 @@ export default function SocialProfile({ theme, onCreateStatus, onCreateReel, ref
                                                 style={{ width: '100%', height: '100%' }}
                                             />
                                         ) : (
-                                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>{user.name?.[0]?.toUpperCase()}</Text>
+                                            <Ionicons name="person" size={20} color={theme.textSecondary} />
                                         )}
                                     </View>
                                     <Text style={{ color: 'white', fontWeight: 'bold' }}>{user.name}</Text>
@@ -537,6 +582,20 @@ export default function SocialProfile({ theme, onCreateStatus, onCreateReel, ref
                 onClose={() => setShareVisible(false)}
                 currentUser={{ _id: currentUserId }}
                 selectedReel={previewModalVisible ? selectedReel : selectedPost}
+            />
+
+            {/* Edit Profile Modal */}
+            <EditProfileModal
+                visible={editProfileVisible}
+                onClose={() => setEditProfileVisible(false)}
+                userProfile={user}
+                currentUserId={currentUserId}
+                theme={theme}
+                onProfileUpdate={(updatedUser) => {
+                    setUser(prev => ({ ...prev, ...updatedUser }));
+                    // Also update global SocketContext userProfile to keep it in sync
+                    setUserProfile(prev => ({ ...prev, ...updatedUser }));
+                }}
             />
         </View>
     );
@@ -627,7 +686,7 @@ const ShareSheet = ({ visible, onClose, currentUser, selectedReel }) => {
             // Socket
             const socketUrl = API_BASE.replace('/api/auth', '');
             socket.current = io(socketUrl);
-            socket.current.emit('join', currentUser?._id);
+            socket.current?.emit('join', currentUser?._id);
 
         } else {
             Animated.timing(slideAnim, { toValue: Dimensions.get('window').height, duration: 200, useNativeDriver: true }).start();
@@ -652,7 +711,7 @@ const ShareSheet = ({ visible, onClose, currentUser, selectedReel }) => {
         setSentUsers(prev => [...prev, userId]);
         if (socket.current && selectedReel) {
             const reelUrl = selectedReel.url.startsWith('http') ? selectedReel.url : `${SERVER_ROOT}${selectedReel.url}`;
-            socket.current.emit('sendMessage', {
+            socket.current?.emit('sendMessage', {
                 sender: currentUser._id,
                 recipient: userId,
                 content: reelUrl,
@@ -694,7 +753,9 @@ const ShareSheet = ({ visible, onClose, currentUser, selectedReel }) => {
                                         {item.profilePic ? (
                                             <Image source={{ uri: `${API_BASE.replace('/api/auth', '')}${item.profilePic}` }} style={{ width: 44, height: 44, borderRadius: 22 }} />
                                         ) : (
-                                            <Ionicons name="person-circle" size={44} color="#ccc" />
+                                            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }}>
+                                                <Ionicons name="person" size={24} color="#8E8E93" />
+                                            </View>
                                         )}
                                     </View>
                                     <View style={{ flex: 1 }}>

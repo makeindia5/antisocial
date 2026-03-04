@@ -26,7 +26,7 @@ const ShareModal = ({ visible, onClose, currentUser, selectedItem, itemType = 'r
             // Connect Socket
             const socketUrl = API_BASE.replace('/api/auth', '');
             socket.current = io(socketUrl);
-            socket.current.emit('join', currentUser?._id);
+            socket.current?.emit('join', currentUser?._id);
         }
 
         return () => {
@@ -93,7 +93,7 @@ const ShareModal = ({ visible, onClose, currentUser, selectedItem, itemType = 'r
                 contentUrl = selectedItem.mediaUrl.startsWith('http') ? selectedItem.mediaUrl : `${API_BASE.replace('/api/auth', '')}${selectedItem.mediaUrl}`;
             }
 
-            socket.current.emit('sendMessage', {
+            socket.current?.emit('sendMessage', {
                 sender: currentUser._id,
                 recipient: userId,
                 content: contentUrl,
@@ -273,7 +273,9 @@ const ShareModal = ({ visible, onClose, currentUser, selectedItem, itemType = 'r
                                             {item.profilePic ? (
                                                 <Image source={{ uri: `${API_BASE.replace('/api/auth', '')}${item.profilePic}` }} style={styles.userAvatar} />
                                             ) : (
-                                                <Ionicons name="person-circle" size={50} color="#ccc" />
+                                                <View style={[styles.userAvatar, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
+                                                    <Ionicons name="person" size={24} color="#8E8E93" />
+                                                </View>
                                             )}
                                         </View>
                                         <View style={styles.userInfoContainer}>

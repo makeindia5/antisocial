@@ -86,6 +86,7 @@ export default function SocialFeed({ theme, posts, statuses, onCreateStatus, onV
                 )}
                 ListHeaderComponent={renderHeader}
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />
                 }

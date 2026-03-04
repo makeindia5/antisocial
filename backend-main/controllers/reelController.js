@@ -1,7 +1,6 @@
 const Reel = require('../models/Reel');
 const User = require('../models/user');
 const Notification = require('../models/Notification');
-const mongoose = require('mongoose');
 
 exports.createReel = async (req, res) => {
     try {
@@ -22,29 +21,12 @@ exports.createReel = async (req, res) => {
 
 exports.getReels = async (req, res) => {
     try {
-        const { exclude } = req.query;
-        let excludeIds = [];
-        if (exclude) {
-            excludeIds = exclude.split(',').map(id => id.trim());
-        }
-
-        const reels = await Reel.aggregate([
-            { $match: { _id: { $nin: excludeIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-            { $sample: { size: 10 } }
-        ]);
-
-        await Reel.populate(reels, { path: 'user', select: 'name profilePic' });
+        const reels = await Reel.find()
+            .sort({ createdAt: -1 })
+            .populate('user', 'name profilePic');
         res.json(reels);
     } catch (e) {
-        // Fallback or error handling
-        console.error("Reel feed error:", e);
-        try {
-            // Fallback to normal find if aggregation fails (e.g. invalid IDs)
-            const reels = await Reel.find().sort({ createdAt: -1 }).limit(10).populate('user', 'name profilePic');
-            res.json(reels);
-        } catch (innerE) {
-            res.status(500).json({ error: innerE.message });
-        }
+        res.status(500).json({ error: e.message });
     }
 };
 

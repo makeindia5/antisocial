@@ -59,6 +59,9 @@ const UserSchema = new mongoose.Schema({
     // Social Media Fields
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    username: { type: String, unique: true, sparse: true },
+    pronouns: { type: String, default: '' },
+    gender: { type: String, default: '' },
     bio: { type: String, default: '' },
     website: { type: String, default: '' },
     postsCount: { type: Number, default: 0 },

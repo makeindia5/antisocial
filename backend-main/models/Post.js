@@ -28,6 +28,26 @@ const PostSchema = new mongoose.Schema({
         text: String,
         createdAt: { type: Date, default: Date.now }
     }],
+    isArchived: {
+        type: Boolean,
+        default: false
+    },
+    hideLikes: {
+        type: Boolean,
+        default: false
+    },
+    hideShares: {
+        type: Boolean,
+        default: false
+    },
+    turnOffCommenting: {
+        type: Boolean,
+        default: false
+    },
+    isPinned: {
+        type: Boolean,
+        default: false
+    },
     createdAt: {
         type: Date,
         default: Date.now

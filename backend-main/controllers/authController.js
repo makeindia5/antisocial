@@ -32,17 +32,18 @@ const getGDMessages = async (req, res) => {
 
 const login = async (req, res) => {
   const { email, password } = req.body;
-  console.log("Login Attempt for:", email);
+  const cleanEmail = email ? email.trim() : "";
+  console.log("Login Attempt for:", cleanEmail);
   try {
-    // Allow login with Email OR Phone
+    // Allow login with Email OR Phone (Case Insensitive)
     const user = await User.findOne({
       $or: [
-        { email: email },
-        { phoneNumber: email } // We reuse 'email' variable as identifier
+        { email: { $regex: new RegExp(`^${cleanEmail}$`, "i") } },
+        { phoneNumber: cleanEmail } // We reuse 'email' variable as identifier
       ]
     });
     if (!user) {
-      console.log("User not found for identifier:", email);
+      console.log("User not found for identifier:", cleanEmail);
       return res.status(400).json({ message: "Invalid credentials" });
     }
     console.log("User found:", user.email);
@@ -323,10 +324,20 @@ const uploadAvatar = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { userId, name, about } = req.body;
-    // Map 'about' from frontend to 'bio' in DB
+    const { userId, name, about, username, pronouns, gender, bio, website } = req.body;
+    // Map 'about' from frontend to 'bio' in DB for legacy compatibility, but prefer 'bio' directly if passed
     const updateData = { name };
-    if (about !== undefined) updateData.bio = about;
+    if (about !== undefined && bio === undefined) updateData.bio = about;
+    else if (bio !== undefined) updateData.bio = bio;
+
+    if (username) updateData.username = username;
+    else if (username === '') updateData.$unset = { ...updateData.$unset, username: 1 };
+
+    if (pronouns !== undefined) updateData.pronouns = pronouns;
+    if (gender !== undefined) updateData.gender = gender;
+
+    if (website) updateData.website = website;
+    else if (website === '') updateData.$unset = { ...updateData.$unset, website: 1 };
 
     const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -336,7 +347,11 @@ const updateProfile = async (req, res) => {
       user: {
         name: user.name,
         about: user.bio,
-        bio: user.bio
+        bio: user.bio,
+        username: user.username,
+        pronouns: user.pronouns,
+        gender: user.gender,
+        website: user.website
       }
     });
   } catch (e) {
@@ -419,12 +434,19 @@ const getCommunityUsers = async (req, res) => {
         ]
       }).sort({ createdAt: -1 });
 
+      let lastMessageText = '';
+      if (lastMsg) {
+        if (lastMsg.type === 'reel') lastMessageText = 'Shared a reel';
+        else if (lastMsg.type === 'post') lastMessageText = 'Shared a post';
+        else lastMessageText = lastMsg.content;
+      }
+
       return {
         ...u,
         _id: uIdStr, // Keep it string
         unreadCount,
         lastMessageDate: lastMsg ? lastMsg.createdAt : new Date(0),
-        lastMessageText: lastMsg ? lastMsg.content : ''
+        lastMessageText
       };
     }));
 

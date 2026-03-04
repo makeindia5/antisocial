@@ -35,34 +35,13 @@ const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpe
     const [isPlaying, setIsPlaying] = useState(true);
 
     useEffect(() => {
-        let mounted = true;
-
-        const playVideo = async () => {
-            if (isActive && video.current) {
-                try {
-                    await video.current.playAsync();
-                    if (mounted) {
-                        video.current.setRateAsync(playbackSpeed, true);
-                        setIsPlaying(true);
-                    }
-                } catch (e) {
-                    // console.warn("Video play error:", e);
-                }
-            } else if (!isActive && video.current) {
-                try {
-                    await video.current.pauseAsync();
-                } catch (e) { }
-            }
-        };
-
-        playVideo();
-
-        return () => {
-            mounted = false;
-            if (video.current) {
-                video.current.unloadAsync();
-            }
-        };
+        if (isActive) {
+            setIsPlaying(true);
+            video.current?.playAsync();
+            video.current?.setRateAsync(playbackSpeed, true);
+        } else {
+            video.current?.pauseAsync();
+        }
     }, [isActive, playbackSpeed]);
 
     useEffect(() => {
@@ -98,14 +77,6 @@ const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpe
                     shouldPlay={isActive && isPlaying}
                     rate={playbackSpeed}
                     useNativeControls={false}
-                    posterSource={item.thumbnail ? { uri: getVideoUrl(item.thumbnail) } : null}
-                    posterStyle={{ resizeMode: 'cover' }}
-                    usePoster={true}
-                    onPlaybackStatusUpdate={status => {
-                        if (status.didJustFinish) {
-                            // Loop or auto-scroll logic
-                        }
-                    }}
                 />
 
                 {!isPlaying && (
@@ -159,7 +130,11 @@ const ReelItem = ({ item, isActive, currentUser, onLike, onOpenMenu, playbackSpe
                                 <View style={styles.avatarPlaceholder}>
                                     {item.user?.profilePic ? (
                                         <Image source={{ uri: `${API_BASE.replace('/api/auth', '')}${item.user.profilePic}` }} style={{ width: 32, height: 32, borderRadius: 16 }} />
-                                    ) : null}
+                                    ) : (
+                                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }}>
+                                            <Ionicons name="person" size={18} color="#8E8E93" />
+                                        </View>
+                                    )}
                                 </View>
                                 <Text style={styles.username}>{item.user?.name || 'User'}</Text>
                                 <TouchableOpacity style={styles.followBtn}>
@@ -488,7 +463,7 @@ const ReelsView = ({ theme, onFullScreenChange, refreshTrigger, reels = [], onRe
     }).current;
 
     const viewabilityConfig = useRef({
-        itemVisiblePercentThreshold: 80 // Increased to ensure focus before playing
+        itemVisiblePercentThreshold: 50
     }).current;
 
     return (
@@ -658,7 +633,7 @@ const styles = StyleSheet.create({
     video: {
         width: '100%',
         height: '100%',
-        backgroundColor: 'black', // DEBUG: Visible if video fails to load
+        backgroundColor: 'red', // DEBUG: Visible if video fails to load
     },
     overlay: {
         position: 'absolute',

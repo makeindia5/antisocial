@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Antisocial",
+    "name": "INTRAA",
     "slug": "antisocial",
-    "version": "1.0.0",
+    "version": "2.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,7 +18,8 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.geminifinance.antisocial",
+      "package": "com.antisocial.app",
+      "versionCode": 13,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#ffffff"
@@ -53,15 +54,17 @@
           }
         }
       ],
-      "expo-barcode-scanner"
+      "expo-barcode-scanner",
+      "expo-asset"
     ],
     "extra": {
       "router": {
         "origin": false
       },
       "eas": {
-        "projectId": "a817445c-b924-4d42-bb1e-1c1fe7111271"
+        "projectId": "62f2bfa1-2175-4bf5-b9b2-3af9d27820c5"
       }
-    }
+    },
+    "owner": "indiyapay"
   }
 }

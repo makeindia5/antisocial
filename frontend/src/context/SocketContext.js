@@ -60,18 +60,22 @@ export const SocketProvider = ({ children }) => {
             const recipientId = msg.recipient ? String(msg.recipient?._id || msg.recipient) : null;
             const groupId = msg.groupId ? String(msg.groupId?._id || msg.groupId) : null;
 
+            let messageText = msg.content;
+            if (msg.type === 'reel') messageText = 'Shared a reel';
+            else if (msg.type === 'post') messageText = 'Shared a post';
+
             if (groupId) {
                 // Group Message
                 setLastMessages(prev => ({
                     ...prev,
-                    [`group_${groupId}`]: { text: msg.content, date: msg.createdAt, senderName: msg.sender?.name || 'User' }
+                    [`group_${groupId}`]: { text: messageText, date: msg.createdAt, senderName: msg.sender?.name || 'User' }
                 }));
             } else {
                 // 1:1 Message
                 const otherUserId = (senderId === String(userId)) ? recipientId : senderId;
                 setLastMessages(prev => ({
                     ...prev,
-                    [otherUserId]: { text: msg.content, date: msg.createdAt }
+                    [otherUserId]: { text: messageText, date: msg.createdAt }
                 }));
 
                 if (recipientId === String(userId)) {
@@ -100,7 +104,6 @@ export const SocketProvider = ({ children }) => {
         return () => {
             if (socket.current) {
                 console.log("Disconnecting Global Socket");
-                socket.current.removeAllListeners();
                 socket.current.disconnect();
             }
         };

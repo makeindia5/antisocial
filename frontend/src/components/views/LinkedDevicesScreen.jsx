@@ -104,7 +104,7 @@ export default function LinkedDevicesScreen() {
                 }
 
                 // Emit to backend
-                socket.emit('mobile:scan_qr', {
+                socket?.emit('mobile:scan_qr', {
                     qrCodeId: data,
                     token: token,
                     userId: user._id

@@ -26,13 +26,13 @@ exports.createPost = async (req, res) => {
 exports.getFeed = async (req, res) => {
     try {
         const { userId } = req.query;
-        let query = {};
+        let query = { isArchived: { $ne: true } };
 
         if (userId) {
             const user = await User.findById(userId);
             if (user && user.following.length > 0) {
                 // Show posts from following + user's own posts
-                query = { user: { $in: [...user.following, userId] } };
+                query.user = { $in: [...user.following, userId] };
             }
         }
 
@@ -44,7 +44,7 @@ exports.getFeed = async (req, res) => {
 
         // Discovery Fallback: If no posts from following, show global latest posts
         if (posts.length === 0) {
-            posts = await Post.find({})
+            posts = await Post.find({ isArchived: { $ne: true } })
                 .sort({ createdAt: -1 })
                 .populate('user', 'name profilePic')
                 .populate('comments.user', 'name profilePic')
@@ -118,7 +118,8 @@ exports.deletePost = async (req, res) => {
         const post = await Post.findById(postId);
 
         if (!post) return res.status(404).json({ error: 'Post not found' });
-        if (post.user.toString() !== userId) return res.status(403).json({ error: 'Unauthorized' });
+        const postUserId = post.user._id ? post.user._id.toString() : post.user.toString();
+        if (postUserId !== userId) return res.status(403).json({ error: 'Unauthorized' });
 
         await Post.findByIdAndDelete(postId);
         await User.findByIdAndUpdate(userId, { $inc: { postsCount: -1 } });
@@ -132,7 +133,9 @@ exports.deletePost = async (req, res) => {
 exports.getUserPosts = async (req, res) => {
     try {
         const { userId } = req.params;
-        const posts = await Post.find({ user: userId }).sort({ createdAt: -1 }).populate('user', 'name profilePic');
+        const posts = await Post.find({ user: userId, isArchived: { $ne: true } })
+            .sort({ isPinned: -1, createdAt: -1 })
+            .populate('user', 'name profilePic');
         res.json(posts);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -143,7 +146,7 @@ exports.getExploreFeed = async (req, res) => {
     try {
         // Simple exploration: Latest posts from everyone, shuffled or sorted by popularity
         // In a real app, this would be an interest-based algorithm
-        const posts = await Post.find({})
+        const posts = await Post.find({ isArchived: { $ne: true } })
             .sort({ createdAt: -1 }) // Or by popularity (likes)
             .populate('user', 'name profilePic')
             .limit(50);
@@ -151,6 +154,48 @@ exports.getExploreFeed = async (req, res) => {
         // Shuffle for variety (optional)
         const shuffled = posts.sort(() => 0.5 - Math.random());
         res.json(shuffled);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+exports.updatePostSettings = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId, isArchived, hideLikes, hideShares, turnOffCommenting, isPinned } = req.body;
+
+        const post = await Post.findById(id);
+        if (!post) return res.status(404).json({ error: 'Post not found' });
+        const postUserId = post.user._id ? post.user._id.toString() : post.user.toString();
+        if (postUserId !== userId) return res.status(403).json({ error: 'Unauthorized to update this post' });
+
+        if (isArchived !== undefined) post.isArchived = isArchived;
+        if (hideLikes !== undefined) post.hideLikes = hideLikes;
+        if (hideShares !== undefined) post.hideShares = hideShares;
+        if (turnOffCommenting !== undefined) post.turnOffCommenting = turnOffCommenting;
+        if (isPinned !== undefined) post.isPinned = isPinned;
+
+        await post.save();
+        res.json({ success: true, post });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+exports.updatePostCaption = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId, caption } = req.body;
+
+        const post = await Post.findById(id);
+        if (!post) return res.status(404).json({ error: 'Post not found' });
+        const postUserId = post.user._id ? post.user._id.toString() : post.user.toString();
+        if (postUserId !== userId) return res.status(403).json({ error: 'Unauthorized' });
+
+        post.caption = caption;
+        await post.save();
+
+        res.json({ success: true, caption: post.caption });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

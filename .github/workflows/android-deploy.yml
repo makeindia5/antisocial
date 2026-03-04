@@ -1,0 +1,78 @@
+name: Android Internal Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Recreate Play Store Key
+        working-directory: ./frontend
+        run: echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > google-services-key.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Auto-increment Version
+        run: node scripts/increment-version.js
+
+      - name: Commit Version Change
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add frontend/app.json
+          git commit -m "chore: bump version [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Deploy Backend to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 195.35.7.25
+          username: root
+          port: 22
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/antisocial || exit
+            git pull
+            npm install
+            # Restart all apps defined in ecosystem.config.js
+            pm2 startOrRestart ecosystem.config.js --env production
+            pm2 save
+
+      - name: Wait for Backend
+        run: sleep 20
+
+      - name: Verify API Health
+        env:
+          API_URL: https://gurudipaksalviprivatelimited.com/api/auth
+        run: node scripts/check-api.js
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build App
+        working-directory: ./frontend
+        run: npx eas build --platform android --profile production --non-interactive
+        env:
+          EXPO_PUBLIC_API_URL: https://gurudipaksalviprivatelimited.com
+
+      - name: Submit to Play Store
+        working-directory: ./frontend
+        run: npx eas submit --platform android --latest --non-interactive

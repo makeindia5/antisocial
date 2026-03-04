@@ -13,11 +13,41 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
+import { Animated } from 'react-native';
 
 import * as Clipboard from 'expo-clipboard';
 
 // Use same env logic or hardcode for consistency matching user env
 const BACKEND_URL = "http://192.168.29.129:5000";
+
+const formatDateLabel = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+
+    if (now.getDate() === date.getDate() && now.getMonth() === date.getMonth() && now.getFullYear() === date.getFullYear()) return "Today";
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (yesterday.getDate() === date.getDate() && yesterday.getMonth() === date.getMonth() && yesterday.getFullYear() === date.getFullYear()) return "Yesterday";
+
+    return date.toLocaleDateString();
+};
+
+const processMessagesWithDates = (messages) => {
+    const processed = [];
+    let lastDate = null;
+
+    messages.forEach(msg => {
+        const dateLabel = formatDateLabel(msg.createdAt || Date.now());
+        if (dateLabel !== lastDate) {
+            processed.push({ type: 'date_header', content: dateLabel, _id: `date-${dateLabel}-${processed.length}` });
+            lastDate = dateLabel;
+        }
+        processed.push(msg);
+    });
+    return processed;
+};
 
 export default function GroupChatScreen() {
     const { colors } = useTheme();
@@ -141,6 +171,42 @@ export default function GroupChatScreen() {
             .catch(console.error);
     };
 
+    // Rotary Animation Logic
+    const [rotaryAnim] = useState(new Animated.Value(0));
+    const [attachmentMenuVisible, setAttachmentMenuVisible] = useState(false);
+
+    useEffect(() => {
+        if (attachmentMenuVisible) {
+            Animated.spring(rotaryAnim, {
+                toValue: 1,
+                friction: 5,
+                useNativeDriver: true
+            }).start();
+        } else {
+            Animated.timing(rotaryAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true
+            }).start();
+        }
+    }, [attachmentMenuVisible]);
+
+    const handleLocationShare = () => {
+        Alert.alert("Location", "Coming Soon");
+    };
+
+    const pickDocument = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
+            if (result.type === 'success') {
+                // Implement upload logic
+                Alert.alert("Document", `Selected: ${result.name}`);
+            }
+        } catch (e) {
+            Alert.alert("Error", "Document selection failed");
+        }
+    };
+
     const fetchForwardUsers = async () => {
         setForwardLoading(true);
         try {
@@ -171,7 +237,7 @@ export default function GroupChatScreen() {
                 content: selectedMessage.content,
                 type: selectedMessage.type
             };
-            socket.emit('sendMessage', msgData);
+            socket?.emit('sendMessage', msgData);
         });
 
         const count = selectedForwardUsers.size;
@@ -190,7 +256,7 @@ export default function GroupChatScreen() {
         if (!selectedMessage) return;
         if (!selectedMessage) return;
         console.log("Emitting Reaction:", { msgId: selectedMessage._id, emoji, userId: myId });
-        socket.emit('addReaction', { msgId: selectedMessage._id, emoji, userId: myId });
+        socket?.emit('addReaction', { msgId: selectedMessage._id, emoji, userId: myId });
         setContextMenuVisible(false);
     };
 
@@ -215,7 +281,7 @@ export default function GroupChatScreen() {
                     {
                         text: "Delete for me",
                         onPress: () => {
-                            socket.emit('deleteMessageForMe', { msgId: selectedMessage._id, userId: myId });
+                            socket?.emit('deleteMessageForMe', { msgId: selectedMessage._id, userId: myId });
                             setMessages(prev => prev.filter(m => m._id !== selectedMessage._id));
                         }
                     }
@@ -226,7 +292,7 @@ export default function GroupChatScreen() {
                         text: "Delete for everyone",
                         style: "destructive",
                         onPress: () => {
-                            socket.emit('deleteMessage', { msgId: selectedMessage._id, chatId: id, isGroup: true });
+                            socket?.emit('deleteMessage', { msgId: selectedMessage._id, chatId: id, isGroup: true });
                             // Optimistic update not needed as socket will broadcast
                         }
                     });
@@ -349,7 +415,7 @@ export default function GroupChatScreen() {
     useEffect(() => {
         if (!myId || !id || !socket) return;
 
-        socket.emit('joinGroup', id);
+        socket?.emit('joinGroup', id);
 
         socket.on('receiveMessage', (msg) => {
             // Verify it belongs to this group (socket rooms handles it, but safety check)
@@ -393,7 +459,7 @@ export default function GroupChatScreen() {
         });
 
         return () => {
-            socket.emit('leaveGroup', id);
+            socket?.emit('leaveGroup', id);
             socket.off('receiveMessage');
             socket.off('messageStatusUpdate');
             socket.off('messageReaction');
@@ -441,7 +507,7 @@ export default function GroupChatScreen() {
             if (senderId !== String(myId)) {
                 const isRead = msg.readBy?.some(r => String(r.user?._id || r.user) === String(myId));
                 if (!isRead) {
-                    socket.emit('markAsRead', { msgId: msg._id, userId: myId });
+                    socket?.emit('markAsRead', { msgId: msg._id, userId: myId });
                 }
             }
         });
@@ -452,7 +518,7 @@ export default function GroupChatScreen() {
         const finalContent = content || text;
 
         if (editingMessage && type === 'text') {
-            socket.emit('editMessage', { msgId: editingMessage._id, content: finalContent, chatId: id, isGroup: true });
+            socket?.emit('editMessage', { msgId: editingMessage._id, content: finalContent, chatId: id, isGroup: true });
             setMessages(prev => prev.map(m => m._id === editingMessage._id ? { ...m, content: finalContent, isEdited: true } : m));
             setEditingMessage(null);
             setText('');
@@ -467,7 +533,7 @@ export default function GroupChatScreen() {
             isGroup: true,
             replyTo: replyToMessage?._id
         };
-        socket.emit('sendMessage', msgData);
+        socket?.emit('sendMessage', msgData);
         if (type === 'text') {
             setText('');
             setReplyToMessage(null);
@@ -510,7 +576,7 @@ export default function GroupChatScreen() {
             {
                 text: "Delete for me",
                 onPress: () => {
-                    socket.emit('deleteMessageForMe', { msgId: viewerData._id, userId: myId });
+                    socket?.emit('deleteMessageForMe', { msgId: viewerData._id, userId: myId });
                     setMessages(prev => prev.filter(m => m._id !== viewerData._id));
                     setViewerVisible(false);
                 }
@@ -522,7 +588,7 @@ export default function GroupChatScreen() {
                 text: "Delete for everyone",
                 style: "destructive",
                 onPress: () => {
-                    socket.emit('deleteMessage', { msgId: viewerData._id, userId: myId });
+                    socket?.emit('deleteMessage', { msgId: viewerData._id, userId: myId });
                     setViewerVisible(false);
                 }
             });
@@ -716,6 +782,32 @@ export default function GroupChatScreen() {
             </TouchableOpacity>
         );
 
+        if (item.type === 'reel' || item.type === 'post') {
+            const isReel = item.type === 'reel';
+            return (
+                <TouchableOpacity onPress={() => Linking.openURL(item.content)} style={{ width: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: 'rgba(0,0,0,0.1)' }}>
+                        <Ionicons name={isReel ? "play-circle" : "image"} size={20} color={theme.textPrimary} style={{ marginRight: 6 }} />
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.textPrimary }}>
+                            {isReel ? 'Shared Reel' : 'Shared Post'}
+                        </Text>
+                    </View>
+                    {isReel ? (
+                        <View style={{ width: '100%', height: 250, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }}>
+                            <Ionicons name="play" size={40} color="white" />
+                        </View>
+                    ) : (
+                        <Image source={{ uri: item.content }} style={{ width: '100%', height: 250 }} resizeMode="cover" />
+                    )}
+                    <View style={{ padding: 10 }}>
+                        <Text style={{ fontSize: 13, color: theme.textPrimary }} numberOfLines={2}>
+                            Tap to view {isReel ? 'reel' : 'post'}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+            );
+        }
+
         const itemSenderId = String(item.sender?._id || item.sender);
         const isMe = itemSenderId === String(myId);
 
@@ -837,7 +929,7 @@ export default function GroupChatScreen() {
                                 });
 
                                 // Send message
-                                socket.emit('sendMessage', {
+                                socket?.emit('sendMessage', {
                                     sender: myId,
                                     groupId: id,
                                     content: `📞 Started a group call\nJoin here: code ${internalCode}`,
@@ -864,8 +956,8 @@ export default function GroupChatScreen() {
 
             <ImageBackground source={wallpaper ? { uri: wallpaper } : null} style={{ flex: 1, backgroundColor: wallpaper ? 'transparent' : theme.background }} resizeMode="cover">
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === "ios" ? "padding" : undefined}
-                    keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 90}
                     style={{ flex: 1 }}
                 >
                     {/* Reply/Edit Preview */}
@@ -961,28 +1053,142 @@ export default function GroupChatScreen() {
                     {/* Floating Input Bar */}
                     {canSend() ? (
                         <View style={[styles.inputContainerWrapper, { backgroundColor: 'transparent', paddingBottom: 10 }]}>
-                            <View style={[styles.floatingInputBar, { backgroundColor: 'white', borderRadius: 25, marginHorizontal: 10, paddingVertical: 5 }]}>
-                                <TouchableOpacity onPress={() => { setContextMenuVisible(true); setSelectedMessage(null); }} style={[styles.iconBtn, { backgroundColor: '#e6f2f1', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginLeft: 5 }]}>
-                                    <Ionicons name="add" size={24} color="#075E54" />
-                                </TouchableOpacity>
-                                <TextInput
-                                    ref={inputRef}
-                                    value={text}
-                                    onChangeText={setText}
-                                    style={[styles.input, { color: 'black', marginLeft: 10 }]}
-                                    placeholder="Type a message..."
-                                    placeholderTextColor="#999"
-                                    multiline
-                                />
-                                {text.length > 0 ? (
-                                    <TouchableOpacity onPress={() => sendMessage('text')} style={[styles.sendBtn, { backgroundColor: '#075E54', width: 36, height: 36, borderRadius: 18, marginLeft: 5 }]}>
-                                        <Ionicons name="arrow-up" size={20} color="white" />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 10 }}>
+                                <View style={{ position: 'relative', marginRight: 8, zIndex: 9999, elevation: 20 }}>
+                                    {/* Rotary Menu Items */}
+                                    <View style={{ position: 'absolute', bottom: 60, left: 0, alignItems: 'center', zIndex: 9999, elevation: 20 }}>
+                                        {attachmentMenuVisible && (
+                                            <>
+                                                {/* Gallery */}
+                                                <Animated.View style={[
+                                                    styles.rotaryItem,
+                                                    {
+                                                        transform: [
+                                                            { translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -120] }) },
+                                                            { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) },
+                                                            { scale: rotaryAnim }
+                                                        ]
+                                                    }
+                                                ]}>
+                                                    <TouchableOpacity onPress={() => pickImage()} style={[styles.rotaryBtn, { backgroundColor: '#4CD964' }]}>
+                                                        <Ionicons name="images" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+
+                                                {/* Camera */}
+                                                <Animated.View style={[
+                                                    styles.rotaryItem,
+                                                    {
+                                                        transform: [
+                                                            { translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -140] }) },
+                                                            { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 30] }) },
+                                                            { scale: rotaryAnim }
+                                                        ]
+                                                    }
+                                                ]}>
+                                                    <TouchableOpacity onPress={() => pickImage()} style={[styles.rotaryBtn, { backgroundColor: '#007AFF' }]}>
+                                                        <Ionicons name="camera" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+
+                                                {/* Audio (New Feature) */}
+                                                <Animated.View style={[
+                                                    styles.rotaryItem,
+                                                    {
+                                                        transform: [
+                                                            { translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -110] }) },
+                                                            { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 80] }) },
+                                                            { scale: rotaryAnim }
+                                                        ]
+                                                    }
+                                                ]}>
+                                                    <TouchableOpacity onPress={() => Alert.alert("Audio", "Coming Soon")} style={[styles.rotaryBtn, { backgroundColor: '#FFCF00' }]}>
+                                                        <Ionicons name="mic" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+
+                                                {/* Location */}
+                                                <Animated.View style={[
+                                                    styles.rotaryItem,
+                                                    {
+                                                        transform: [
+                                                            { translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -60] }) },
+                                                            { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 110] }) },
+                                                            { scale: rotaryAnim }
+                                                        ]
+                                                    }
+                                                ]}>
+                                                    <TouchableOpacity onPress={handleLocationShare} style={[styles.rotaryBtn, { backgroundColor: '#FF9500' }]}>
+                                                        <Ionicons name="location" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+
+                                                {/* Document */}
+                                                <Animated.View style={[
+                                                    styles.rotaryItem,
+                                                    {
+                                                        transform: [
+                                                            { translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -15] }) },
+                                                            { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 120] }) },
+                                                            { scale: rotaryAnim }
+                                                        ]
+                                                    }
+                                                ]}>
+                                                    <TouchableOpacity onPress={pickDocument} style={[styles.rotaryBtn, { backgroundColor: '#5856D6' }]}>
+                                                        <Ionicons name="document" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+                                            </>
+                                        )}
+                                    </View>
+
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (attachmentMenuVisible) {
+                                                setAttachmentMenuVisible(false);
+                                            } else {
+                                                setAttachmentMenuVisible(true);
+                                            }
+                                        }}
+                                        style={[
+                                            styles.iconBtn,
+                                            {
+                                                backgroundColor: '#075E54', // Group chat theme color
+                                                width: 44, height: 44, borderRadius: 22,
+                                                alignItems: 'center', justifyContent: 'center',
+                                                elevation: 5, shadowColor: '#000',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.25, shadowRadius: 3.84,
+                                            }
+                                        ]}
+                                    >
+                                        <Animated.View style={{ transform: [{ rotate: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }] }}>
+                                            <Ionicons name="add" size={28} color="white" />
+                                        </Animated.View>
                                     </TouchableOpacity>
-                                ) : (
-                                    <TouchableOpacity style={styles.iconBtn}>
-                                        <Ionicons name="mic-outline" size={24} color="#075E54" />
-                                    </TouchableOpacity>
-                                )}
+                                </View>
+
+                                <View style={[styles.floatingInputBar, { backgroundColor: 'white', borderRadius: 25, flex: 1, paddingVertical: 5 }]}>
+
+                                    <TextInput
+                                        ref={inputRef}
+                                        value={text}
+                                        onChangeText={setText}
+                                        style={[styles.input, { color: 'black', marginLeft: 10 }]}
+                                        placeholder="Type a message..."
+                                        placeholderTextColor="#999"
+                                        multiline
+                                    />
+                                    {text.length > 0 ? (
+                                        <TouchableOpacity onPress={() => sendMessage('text')} style={[styles.sendBtn, { backgroundColor: '#075E54', width: 36, height: 36, borderRadius: 18, marginLeft: 5 }]}>
+                                            <Ionicons name="arrow-up" size={20} color="white" />
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity style={styles.iconBtn}>
+                                            <Ionicons name="mic-outline" size={24} color="#075E54" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </View>
                         </View>
                     ) : (
@@ -1179,41 +1385,7 @@ export default function GroupChatScreen() {
                 </TouchableOpacity>
             </Modal>
 
-            {/* Plus Menu Modal (Attachments) */}
-            <Modal transparent visible={contextMenuVisible && !selectedMessage} animationType="fade" onRequestClose={() => setContextMenuVisible(false)}>
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setContextMenuVisible(false)}
-                >
-                    <View style={{ position: 'absolute', bottom: 100, left: 20, backgroundColor: theme.surface, borderRadius: 16, padding: 10, elevation: 10, width: 200 }}>
-                        <TouchableOpacity style={styles.menuItem} onPress={() => { setContextMenuVisible(false); /* Document Logic */ Alert.alert("Document", "Coming soon"); }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="document-text" size={24} color="#5F6368" style={{ marginRight: 10 }} />
-                                <Text style={{ color: theme.textPrimary }}>Document</Text>
-                            </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem} onPress={() => { setContextMenuVisible(false); pickImage(); }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="image" size={24} color="#d93025" style={{ marginRight: 10 }} />
-                                <Text style={{ color: theme.textPrimary }}>Gallery</Text>
-                            </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem} onPress={() => { setContextMenuVisible(false); /* Audio Logic */ Alert.alert("Audio", "Coming soon"); }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="musical-notes" size={24} color="#e37400" style={{ marginRight: 10 }} />
-                                <Text style={{ color: theme.textPrimary }}>Audio</Text>
-                            </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem} onPress={() => { setContextMenuVisible(false); /* Location Logic */ Alert.alert("Location", "Coming soon"); }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="location" size={24} color="#1e8e3e" style={{ marginRight: 10 }} />
-                                <Text style={{ color: theme.textPrimary }}>Location</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
+            {/* Removed Old Attachment Modal - Replaced by Rotary Menu */}
 
             {/* Premium Center-Positioned Context Menu Modal (Message Actions) */}
             <Modal transparent visible={contextMenuVisible && !!selectedMessage} animationType="fade" onRequestClose={() => setContextMenuVisible(false)}>
@@ -1586,5 +1758,25 @@ const getStyles = (Colors) => StyleSheet.create({
         alignItems: 'center',
         borderTopWidth: 0.5,
         borderTopColor: 'rgba(0,0,0,0.05)',
+    },
+    // Rotary Menu Styles
+    rotaryItem: {
+        position: 'absolute',
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    rotaryBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 3,
     }
 });

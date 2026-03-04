@@ -78,19 +78,25 @@ export default function ChatScreen() {
     const [searchResults, setSearchResults] = useState([]);
     const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
     const inputRef = useRef(null);
-    const scaleAnim = useRef(new Animated.Value(0)).current;
+    const [rotaryAnim] = useState(new Animated.Value(0));
 
     useEffect(() => {
         if (attachmentMenuVisible) {
-            Animated.spring(scaleAnim, {
+            Animated.spring(rotaryAnim, {
                 toValue: 1,
                 friction: 5,
                 useNativeDriver: true
             }).start();
         } else {
-            scaleAnim.setValue(0);
+            Animated.timing(rotaryAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true
+            }).start();
         }
     }, [attachmentMenuVisible]);
+
+
 
     const [contextMenuVisible, setContextMenuVisible] = useState(false);
     const [selectedMessage, setSelectedMessage] = useState(null);
@@ -132,7 +138,7 @@ export default function ChatScreen() {
                 content: selectedMessage.content,
                 type: selectedMessage.type
             };
-            socket.emit('sendMessage', msgData);
+            socket?.emit('sendMessage', msgData);
         });
 
         const count = selectedForwardUsers.size;
@@ -149,7 +155,7 @@ export default function ChatScreen() {
 
     const handleReaction = (emoji) => {
         if (!selectedMessage) return;
-        socket.emit('addReaction', { msgId: selectedMessage._id, emoji, userId: myId });
+        socket?.emit('addReaction', { msgId: selectedMessage._id, emoji, userId: myId });
         setContextMenuVisible(false);
     };
 
@@ -174,7 +180,7 @@ export default function ChatScreen() {
                     {
                         text: "Delete for me",
                         onPress: () => {
-                            socket.emit('deleteMessageForMe', { msgId: selectedMessage._id, userId: myId });
+                            socket?.emit('deleteMessageForMe', { msgId: selectedMessage._id, userId: myId });
                             setMessages(prev => prev.filter(m => m._id !== selectedMessage._id));
                         }
                     }
@@ -185,7 +191,7 @@ export default function ChatScreen() {
                         text: "Delete for everyone",
                         style: "destructive",
                         onPress: () => {
-                            socket.emit('deleteMessage', { msgId: selectedMessage._id, chatId: id });
+                            socket?.emit('deleteMessage', { msgId: selectedMessage._id, chatId: id });
                         }
                     });
                 }
@@ -307,7 +313,7 @@ export default function ChatScreen() {
             if (senderId === partnerId || recipientId === partnerId) {
                 setMessages((prev) => [...prev, msg]);
                 if (senderId === partnerId) {
-                    socket.emit('markAsRead', { msgId: msg._id, userId: myId });
+                    socket?.emit('markAsRead', { msgId: msg._id, userId: myId });
                     markAsRead(partnerId);
                 }
             }
@@ -420,7 +426,7 @@ export default function ChatScreen() {
             type: finalType,
             replyTo: replyToMessage?._id
         };
-        socket.emit('sendMessage', msgData);
+        socket?.emit('sendMessage', msgData);
         if (type === 'text') {
             setText('');
             setReplyToMessage(null);
@@ -461,7 +467,7 @@ export default function ChatScreen() {
             { text: "Cancel", style: "cancel" },
             {
                 text: "Delete", style: "destructive", onPress: () => {
-                    socket.emit('deleteMessage', { msgId: viewerData._id, userId: myId });
+                    socket?.emit('deleteMessage', { msgId: viewerData._id, userId: myId });
                     setViewerVisible(false);
                 }
             }
@@ -574,6 +580,33 @@ export default function ChatScreen() {
                 </TouchableOpacity>
             );
         }
+
+        if (item.type === 'reel' || item.type === 'post') {
+            const isReel = item.type === 'reel';
+            return (
+                <TouchableOpacity onPress={() => Linking.openURL(item.content)} style={{ width: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: 'rgba(0,0,0,0.1)' }}>
+                        <Ionicons name={isReel ? "play-circle" : "image"} size={20} color={theme.textPrimary} style={{ marginRight: 6 }} />
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.textPrimary }}>
+                            {isReel ? 'Shared Reel' : 'Shared Post'}
+                        </Text>
+                    </View>
+                    {isReel ? (
+                        <View style={{ width: '100%', height: 250, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }}>
+                            <Ionicons name="play" size={40} color="white" />
+                        </View>
+                    ) : (
+                        <Image source={{ uri: item.content }} style={{ width: '100%', height: 250 }} resizeMode="cover" />
+                    )}
+                    <View style={{ padding: 10 }}>
+                        <Text style={{ fontSize: 13, color: theme.textPrimary }} numberOfLines={2}>
+                            Tap to view {isReel ? 'reel' : 'post'}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+            );
+        }
+
         const itemSenderId = String(item.sender?._id || item.sender);
         const isMe = itemSenderId === String(myId);
 
@@ -655,7 +688,11 @@ export default function ChatScreen() {
             }
 
             <ImageBackground source={(!isSocial && wallpaper) ? { uri: wallpaper } : null} style={{ flex: 1, backgroundColor: isSocial ? 'white' : (wallpaper ? 'transparent' : theme.background) }} resizeMode="cover">
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 90}
+                >
                     {/* ... (Reply preview) */}
 
                     <FlatList
@@ -719,6 +756,17 @@ export default function ChatScreen() {
                                         {/* Content Render */}
                                         {renderMessageContent(item)}
 
+                                        {/* Render Reactions */}
+                                        {item.reactions && item.reactions.length > 0 && (
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 5, justifyContent: 'flex-end' }}>
+                                                {item.reactions.map((r, i) => (
+                                                    <View key={i} style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 2, marginLeft: 2, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }}>
+                                                        <Text style={{ fontSize: 10 }}>{r.emoji}</Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        )}
+
                                         <View style={styles.metaRow}>
                                             <Text style={[styles.timeText, { color: isMe ? 'white' : '#777' }]}>
                                                 {new Date(item.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -742,68 +790,141 @@ export default function ChatScreen() {
                             borderTopColor: '#efefef'
                         }
                     ]}>
-                        <View style={[
-                            styles.floatingInputBar,
-                            {
-                                backgroundColor: isSocial ? '#f0f0f0' : (theme.dark ? '#1c1c1e' : 'white'),
-                                borderRadius: 25,
-                                marginHorizontal: 10,
-                                paddingVertical: 5
-                            }
-                        ]}>
-                            <TouchableOpacity
-                                onPress={() => setAttachmentMenuVisible(true)}
-                                style={[
-                                    styles.iconBtn,
-                                    {
-                                        backgroundColor: isSocial ? 'white' : (theme.dark ? '#333' : '#e6f2f1'),
-                                        width: 36, height: 36, borderRadius: 18,
-                                        alignItems: 'center', justifyContent: 'center', marginLeft: 5
-                                    }
-                                ]}
-                            >
-                                <Ionicons name="add" size={24} color={isSocial ? 'black' : (theme.dark ? 'white' : '#075E54')} />
-                            </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 10 }}>
+                            {isSocial && (
+                                <View style={{ position: 'relative', marginRight: 8, zIndex: 9999, elevation: 20 }}>
+                                    {/* Rotary Menu Items (Moved outside and anchored to this container) */}
+                                    <View style={{ position: 'absolute', bottom: 60, left: 0, alignItems: 'center', zIndex: 9999, elevation: 20 }}>
+                                        {attachmentMenuVisible && (
+                                            <>
+                                                <Animated.View style={[styles.rotaryItem, { transform: [{ translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -120] }) }, { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) }, { scale: rotaryAnim }] }]}>
+                                                    <TouchableOpacity onPress={() => pickImage(false)} style={[styles.rotaryBtn, { backgroundColor: '#4CD964' }]}>
+                                                        <Ionicons name="images" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+                                                <Animated.View style={[styles.rotaryItem, { transform: [{ translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -140] }) }, { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 30] }) }, { scale: rotaryAnim }] }]}>
+                                                    <TouchableOpacity onPress={() => pickImage(true)} style={[styles.rotaryBtn, { backgroundColor: '#007AFF' }]}>
+                                                        <Ionicons name="camera" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+                                                <Animated.View style={[styles.rotaryItem, { transform: [{ translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -110] }) }, { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 80] }) }, { scale: rotaryAnim }] }]}>
+                                                    <TouchableOpacity onPress={handleLocationShare} style={[styles.rotaryBtn, { backgroundColor: '#FF9500' }]}>
+                                                        <Ionicons name="location" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+                                                <Animated.View style={[styles.rotaryItem, { transform: [{ translateY: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -60] }) }, { translateX: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 110] }) }, { scale: rotaryAnim }] }]}>
+                                                    <TouchableOpacity onPress={pickDocument} style={[styles.rotaryBtn, { backgroundColor: '#5856D6' }]}>
+                                                        <Ionicons name="document" size={20} color="white" />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+                                            </>
+                                        )}
+                                    </View>
 
-                            <TextInput
-                                ref={inputRef}
-                                value={text}
-                                onChangeText={setText}
-                                style={[
-                                    styles.input,
-                                    {
-                                        color: isSocial ? 'black' : theme.textPrimary,
-                                        marginLeft: 10
-                                    }
-                                ]}
-                                placeholder="Type a message..."
-                                placeholderTextColor={isSocial ? '#999' : theme.textSecondary}
-                                multiline
-                            />
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (attachmentMenuVisible) {
+                                                Animated.timing(rotaryAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setAttachmentMenuVisible(false));
+                                            } else {
+                                                setAttachmentMenuVisible(true);
+                                                Animated.spring(rotaryAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+                                            }
+                                        }}
+                                        style={[
+                                            styles.iconBtn,
+                                            {
+                                                backgroundColor: '#0095F6',
+                                                width: 44, height: 44, borderRadius: 22,
+                                                alignItems: 'center', justifyContent: 'center',
+                                                elevation: 5, shadowColor: '#000',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.25, shadowRadius: 3.84,
+                                            }
+                                        ]}
+                                    >
+                                        <Animated.View style={{ transform: [{ rotate: rotaryAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }] }}>
+                                            <Ionicons name="add" size={28} color="white" />
+                                        </Animated.View>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
 
-                            {text.length > 0 ? (
-                                <TouchableOpacity
-                                    onPress={() => sendMessage('text')}
+                            <View style={[
+                                styles.floatingInputBar,
+                                {
+                                    backgroundColor: isSocial ? '#f0f0f0' : (theme.dark ? '#1c1c1e' : 'white'),
+                                    borderRadius: 25,
+                                    paddingVertical: 5,
+                                    flex: 1 // Take remaining space
+                                }
+                            ]}>
+                                {/* Left Plus Button (Personal Chat Only - Outside logic doesn't apply here for now to keep requested only for social) */}
+                                {!isSocial && (
+                                    <TouchableOpacity
+                                        onPress={() => setAttachmentMenuVisible(true)}
+                                        style={[
+                                            styles.iconBtn,
+                                            {
+                                                backgroundColor: (theme.dark ? '#333' : '#e6f2f1'),
+                                                width: 36, height: 36, borderRadius: 18,
+                                                alignItems: 'center', justifyContent: 'center', marginLeft: 5
+                                            }
+                                        ]}
+                                    >
+                                        <Ionicons name="add" size={24} color={(theme.dark ? 'white' : '#075E54')} />
+                                    </TouchableOpacity>
+                                )}
+
+                                <TextInput
+                                    ref={inputRef}
+                                    value={text}
+                                    onChangeText={setText}
                                     style={[
-                                        styles.sendBtn,
+                                        styles.input,
                                         {
-                                            backgroundColor: isSocial ? '#0095F6' : (isAdminSupport === 'true' ? '#0061FF' : '#075E54'),
-                                            width: 36, height: 36, borderRadius: 18, marginLeft: 5
+                                            color: isSocial ? 'black' : theme.textPrimary,
+                                            marginLeft: 10
                                         }
                                     ]}
-                                >
-                                    <Ionicons name="arrow-up" size={20} color="white" />
-                                </TouchableOpacity>
-                            ) : (
-                                <>
-                                    <TouchableOpacity style={styles.iconBtn} onPress={() => pickImage(true)}>
-                                        <Ionicons name="camera-outline" size={24} color={isSocial ? 'black' : (theme.textSecondary || '#075E54')} />
+                                    placeholder="Type a message..."
+                                    placeholderTextColor={isSocial ? '#999' : theme.textSecondary}
+                                    multiline
+                                />
+
+                                {text.length > 0 ? (
+                                    <TouchableOpacity
+                                        onPress={() => sendMessage('text')}
+                                        style={[
+                                            styles.sendBtn,
+                                            {
+                                                backgroundColor: isSocial ? '#0095F6' : (isAdminSupport === 'true' ? '#0061FF' : '#075E54'),
+                                                width: 36, height: 36, borderRadius: 18, marginLeft: 5
+                                            }
+                                        ]}
+                                    >
+                                        <Ionicons name="arrow-up" size={20} color="white" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity style={styles.iconBtn}>
-                                        <Ionicons name="mic-outline" size={24} color={isSocial ? 'black' : (theme.textSecondary || '#075E54')} />
-                                    </TouchableOpacity>
-                                </>
-                            )}
+                                ) : (
+                                    <>
+                                        {/* Right Side Buttons (Based on type) */}
+                                        {isSocial ? (
+                                            <TouchableOpacity style={styles.iconBtn}>
+                                                <Ionicons name="mic-outline" size={24} color='black' />
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <>
+                                                {/* Standard Icons for Personal Chat */}
+                                                <TouchableOpacity onPress={() => pickImage(true)} style={styles.iconBtn}>
+                                                    <Ionicons name="camera-outline" size={24} color={theme.textSecondary || '#075E54'} />
+                                                </TouchableOpacity>
+                                                <TouchableOpacity style={styles.iconBtn}>
+                                                    <Ionicons name="mic-outline" size={24} color={theme.textSecondary || '#075E54'} />
+                                                </TouchableOpacity>
+                                            </>
+                                        )}
+                                    </>
+                                )}
+                            </View>
                         </View>
                     </View>
 
@@ -856,47 +977,7 @@ export default function ChatScreen() {
             </Modal >
 
             {/* Attachment Sheet */}
-            {/* Animated Pop-Up Attachment Menu */}
-            <Modal transparent visible={attachmentMenuVisible} animationType="fade" onRequestClose={() => setAttachmentMenuVisible(false)}>
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setAttachmentMenuVisible(false)}
-                >
-                    <Animated.View style={[
-                        styles.sheet,
-                        {
-                            backgroundColor: theme.surface,
-                            transform: [{ scale: scaleAnim }],
-                            borderRadius: 20,
-                            padding: 20,
-                            width: '90%',
-                            alignSelf: 'center',
-                            bottom: 100, // Move it up to look like a pop-up
-                            position: 'absolute'
-                        }
-                    ]}>
-                        <View style={styles.sheetRow}>
-                            <TouchableOpacity style={styles.sheetItem} onPress={() => pickImage(false)}>
-                                <View style={[styles.sheetIcon, { backgroundColor: '#4CD964' }]}><Ionicons name="images" size={24} color="white" /></View>
-                                <Text style={[styles.sheetLabel, { color: theme.textPrimary }]}>Gallery</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.sheetItem} onPress={() => pickImage(true)}>
-                                <View style={[styles.sheetIcon, { backgroundColor: '#007AFF' }]}><Ionicons name="camera" size={24} color="white" /></View>
-                                <Text style={[styles.sheetLabel, { color: theme.textPrimary }]}>Camera</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.sheetItem} onPress={handleLocationShare}>
-                                <View style={[styles.sheetIcon, { backgroundColor: '#FF9500' }]}><Ionicons name="location" size={24} color="white" /></View>
-                                <Text style={[styles.sheetLabel, { color: theme.textPrimary }]}>Location</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.sheetItem} onPress={pickDocument}>
-                                <View style={[styles.sheetIcon, { backgroundColor: '#5856D6' }]}><Ionicons name="document" size={24} color="white" /></View>
-                                <Text style={[styles.sheetLabel, { color: theme.textPrimary }]}>File</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </Animated.View>
-                </TouchableOpacity>
-            </Modal>
+
 
             {
                 uploading && (
@@ -905,6 +986,40 @@ export default function ChatScreen() {
                     </View>
                 )
             }
+
+            {/* Modal for Personal Chat Attachments */}
+            {!isSocial && (
+                <Modal transparent visible={attachmentMenuVisible} animationType="fade" onRequestClose={() => setAttachmentMenuVisible(false)}>
+                    <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setAttachmentMenuVisible(false)}>
+                        <View style={{ position: 'absolute', bottom: 100, left: 20, backgroundColor: theme.surface, borderRadius: 16, padding: 10, elevation: 10, width: 200 }}>
+                            <TouchableOpacity style={styles.menuItem} onPress={() => { setAttachmentMenuVisible(false); pickDocument(); }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="document-text" size={24} color="#5F6368" style={{ marginRight: 10 }} />
+                                    <Text style={{ color: theme.textPrimary }}>Document</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.menuItem} onPress={() => { setAttachmentMenuVisible(false); pickImage(false); }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="images" size={24} color="#c5221f" style={{ marginRight: 10 }} />
+                                    <Text style={{ color: theme.textPrimary }}>Gallery</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.menuItem} onPress={() => { setAttachmentMenuVisible(false); pickImage(true); }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="camera" size={24} color="#d93025" style={{ marginRight: 10 }} />
+                                    <Text style={{ color: theme.textPrimary }}>Camera</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.menuItem} onPress={() => { setAttachmentMenuVisible(false); Alert.alert("Location", "Coming soon"); }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="location" size={24} color="#1e8e3e" style={{ marginRight: 10 }} />
+                                    <Text style={{ color: theme.textPrimary }}>Location</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </TouchableOpacity>
+                </Modal>
+            )}
 
             {/* Premium Center-Positioned Context Menu Modal */}
             <Modal transparent visible={contextMenuVisible} animationType="fade" onRequestClose={() => setContextMenuVisible(false)}>
@@ -1194,7 +1309,30 @@ const styles = StyleSheet.create({
     sheetRow: { flexDirection: 'row', justifyContent: 'space-around' },
     sheetItem: { alignItems: 'center' },
     sheetIcon: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-    sheetLabel: { fontSize: 14, fontWeight: '500' },
+    sheetLabel: {
+        marginTop: 5,
+        fontSize: 12,
+        fontWeight: '500'
+    },
+    rotaryItem: {
+        position: 'absolute',
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    rotaryBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 3,
+    },
     loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
 
     // Action Modal Styles (Refined)

@@ -313,7 +313,13 @@ export default function PersonalChats({
                                 const isSelected = tempSelectedContacts.includes(user._id);
                                 return (
                                     <TouchableOpacity key={user._id} style={styles.contactItem} onPress={() => handleContactToggle(user._id)}>
-                                        <Image source={{ uri: user.profilePic ? `${SERVER_URL}${user.profilePic}` : 'https://via.placeholder.com/150' }} style={styles.contactAvatar} />
+                                        {user.profilePic ? (
+                                            <Image source={{ uri: `${SERVER_URL}${user.profilePic}` }} style={styles.contactAvatar} />
+                                        ) : (
+                                            <View style={[styles.contactAvatar, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                                                <Ionicons name="person" size={20} color="#8E8E93" />
+                                            </View>
+                                        )}
                                         <Text style={[styles.contactName, { color: theme.textPrimary }]}>{user.name}</Text>
                                         <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={24} color={isSelected ? TEAL : theme.textSecondary} />
                                     </TouchableOpacity>
@@ -337,7 +343,13 @@ export default function PersonalChats({
                 <TouchableOpacity style={styles.previewBackdrop} activeOpacity={1} onPress={() => setPreviewVisible(false)}>
                     <View style={styles.previewContainer}>
                         <View style={styles.previewHeader}><Text style={styles.previewName}>{previewUser.name}</Text></View>
-                        <Image source={{ uri: previewUser.profilePic ? `${SERVER_URL}${previewUser.profilePic}` : 'https://via.placeholder.com/300' }} style={styles.previewImage} />
+                        {previewUser.profilePic ? (
+                            <Image source={{ uri: `${SERVER_URL}${previewUser.profilePic}` }} style={styles.previewImage} />
+                        ) : (
+                            <View style={[styles.previewImage, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Ionicons name="person" size={120} color="#8E8E93" />
+                            </View>
+                        )}
                         <View style={{ padding: 10, backgroundColor: 'white' }}>
                             <Text style={{ fontSize: 14, color: '#333', fontStyle: 'italic' }}>{previewUser.bio || previewUser.about || "No about info"}</Text>
                             {previewUser.phoneNumber && !previewUser.isNumberHidden && (
@@ -519,7 +531,7 @@ export default function PersonalChats({
                                 <Image source={{ uri: `${SERVER_URL}${profilePic}` }} style={{ width: 50, height: 50, borderRadius: 25 }} />
                             ) : (
                                 <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }}>
-                                    <Ionicons name="person" size={24} color="white" />
+                                    <Ionicons name="person" size={24} color="#8E8E93" />
                                 </View>
                             )}
                             {!hasMyStory && (
@@ -583,7 +595,7 @@ export default function PersonalChats({
                                             <Image source={{ uri: `${SERVER_URL}${item.profilePic}` }} style={styles.avatar} />
                                         ) : (
                                             <View style={[styles.placeholderAvatar, { backgroundColor: '#e0e0e0' }]}>
-                                                <Ionicons name="person" size={24} color="white" />
+                                                <Ionicons name="person" size={24} color="#8E8E93" />
                                             </View>
                                         )}
                                     </TouchableOpacity>
@@ -646,7 +658,7 @@ export default function PersonalChats({
                                 >
                                     <View style={styles.cardRow}>
                                         <View style={[styles.groupAvatar, { backgroundColor: '#e0e0e0' }]}>
-                                            <Ionicons name={group.type === 'announcement' ? "megaphone" : "people"} size={28} color="white" />
+                                            <Ionicons name={group.type === 'announcement' ? "megaphone" : "people"} size={28} color="#8E8E93" />
                                         </View>
                                         <View style={styles.textContainer}>
                                             <View style={styles.topRow}>

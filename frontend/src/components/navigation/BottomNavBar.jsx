@@ -1,6 +1,11 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Animated, Dimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withSpring,
+} from 'react-native-reanimated';
 
 const TABS = {
     personal: [
@@ -23,92 +28,101 @@ const TABS = {
     ]
 };
 
-import { useWindowDimensions } from 'react-native';
-
 export default function BottomNavBar({ mode, activeTab, onTabPress, theme }) {
     const currentTabs = TABS[mode] || [];
-    const indicatorAnim = React.useRef(new Animated.Value(0)).current;
-    const { width } = useWindowDimensions(); // Reactive width
-
-    React.useEffect(() => {
-        const index = currentTabs.findIndex(t => t.key === activeTab);
-        if (index !== -1) {
-            Animated.spring(indicatorAnim, {
-                toValue: index,
-                useNativeDriver: false, // Essential for Web
-                friction: 12,
-                tension: 60
-            }).start();
-        }
-    }, [activeTab, currentTabs, indicatorAnim]);
 
     if (currentTabs.length === 0) return null;
 
-    const TAB_WIDTH = width / currentTabs.length;
-
     return (
         <View style={[styles.tabBar, { backgroundColor: theme.surface, borderTopColor: theme.outline || '#e0e0e0' }]}>
-            {/* Sliding Indicator Background */}
-            <Animated.View style={[
-                styles.slidingIndicator,
-                {
-                    width: TAB_WIDTH * 0.6,
-                    backgroundColor: mode === 'personal' ? '#00000015' : theme.primary + '15',
-                    transform: [{
-                        translateX: indicatorAnim.interpolate({
-                            inputRange: currentTabs.map((_, i) => i),
-                            outputRange: currentTabs.map((_, i) => (i * TAB_WIDTH) + (TAB_WIDTH * 0.2))
-                        })
-                    }]
-                }
-            ]} />
-
-            {currentTabs.map((tab, index) => {
+            {currentTabs.map((tab) => {
                 const isActive = activeTab === tab.key;
-
                 return (
-                    <Pressable
-                        key={tab.key}
+                    <TabItem
+                        key={`${mode}-${tab.key}`}
+                        tab={tab}
+                        isActive={isActive}
+                        mode={mode}
+                        theme={theme}
                         onPress={() => onTabPress(tab.key)}
-                        style={({ pressed }) => [
-                            styles.tabItem,
-                            pressed && { opacity: 0.7 }
-                        ]}
-                    >
-                        <View>
-                            <Animated.View style={{ transform: [{ scale: isActive ? 1.15 : 1 }] }}>
-                                <Ionicons
-                                    name={`${tab.icon}-outline`}
-                                    size={26}
-                                    color={isActive ? (mode === 'personal' ? '#000000' : theme.primary) : theme.textSecondary || '#8E8E93'}
-                                />
-                            </Animated.View>
-                            {/* Example Badge UI */}
-                            {tab.key === 'chats' && mode === 'personal' && (
-                                <View style={styles.badge}>
-                                    <Text style={styles.badgeText}>85</Text>
-                                </View>
-                            )}
-                        </View>
-                        <Text style={[
-                            styles.tabLabel,
-                            { color: isActive ? (mode === 'personal' ? '#000000' : theme.primary) : theme.textSecondary || '#8E8E93' }
-                        ]}>
-                            {tab.label}
-                        </Text>
-                    </Pressable>
+                    />
                 );
             })}
         </View >
     );
 }
 
+function TabItem({ tab, isActive, mode, theme, onPress }) {
+    const activeAnim = useSharedValue(isActive ? 1 : 0);
+
+    React.useEffect(() => {
+        activeAnim.value = withSpring(isActive ? 1 : 0, {
+            damping: 15,
+            stiffness: 150,
+        });
+    }, [isActive]);
+
+    const pillStyle = useAnimatedStyle(() => ({
+        opacity: activeAnim.value,
+        transform: [{ scale: 0.8 + (activeAnim.value * 0.2) }],
+    }));
+
+    const iconStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: 1 + (activeAnim.value * 0.15) }],
+    }));
+
+    // Determine the highlight color based on mode and theme
+    const highlightColor = mode === 'personal' ? '#00000015' : (theme.primary ? theme.primary + '20' : '#007AFF20');
+    const activeContentColor = mode === 'personal' ? '#000000' : (theme.primary || '#007AFF');
+    const inactiveContentColor = theme.textSecondary || '#8E8E93';
+
+    return (
+        <Pressable
+            onPress={onPress}
+            style={styles.tabItem}
+        >
+            <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                {/* Localized Animated Background Pill */}
+                <Animated.View style={[
+                    styles.localizedPill,
+                    { backgroundColor: highlightColor },
+                    pillStyle
+                ]} />
+
+                <Animated.View style={iconStyle}>
+                    <Ionicons
+                        name={`${tab.icon}${isActive ? '' : '-outline'}`}
+                        size={24}
+                        color={isActive ? activeContentColor : inactiveContentColor}
+                    />
+                </Animated.View>
+
+                {/* Badge UI */}
+                {tab.key === 'chats' && mode === 'personal' && (
+                    <View style={styles.badge}>
+                        <Text style={styles.badgeText}>85</Text>
+                    </View>
+                )}
+                <Text style={[
+                    styles.tabLabel,
+                    {
+                        color: isActive ? activeContentColor : inactiveContentColor,
+                        fontWeight: isActive ? '700' : '500'
+                    }
+                ]}>
+                    {tab.label}
+                </Text>
+            </View>
+        </Pressable>
+    );
+}
+
 const styles = StyleSheet.create({
     tabBar: {
         flexDirection: 'row',
-        height: Platform.OS === 'ios' ? 85 : 65,
-        paddingBottom: Platform.OS === 'ios' ? 20 : 10,
-        paddingTop: 10,
+        height: Platform.OS === 'ios' ? 88 : 70,
+        paddingBottom: Platform.OS === 'ios' ? 25 : 12,
+        paddingTop: 8,
         width: '100%',
         borderTopWidth: 0.5,
         position: 'absolute',
@@ -121,20 +135,21 @@ const styles = StyleSheet.create({
         zIndex: 1000,
     },
     tabItem: {
+        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        flex: 1,
+        height: '100%',
+        position: 'relative',
     },
     tabLabel: {
-        fontSize: 10,
+        fontSize: 11,
         marginTop: 4,
-        fontWeight: '500',
     },
     badge: {
         position: 'absolute',
-        top: -4,
-        right: -8,
-        backgroundColor: '#25D366', // WhatsApp green or theme.primary
+        top: -6,
+        right: 15, // Adjusted slightly since pill takes up space
+        backgroundColor: '#25D366',
         borderRadius: 10,
         minWidth: 18,
         height: 18,
@@ -142,18 +157,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 4,
         borderWidth: 1.5,
-        borderColor: '#fff'
+        borderColor: '#fff',
+        zIndex: 10,
     },
     badgeText: {
         color: '#fff',
         fontSize: 9,
         fontWeight: 'bold',
     },
-    slidingIndicator: {
+    localizedPill: {
         position: 'absolute',
-        height: 40,
-        borderRadius: 8,
-        top: 6, // Vertically centered roughly (total height ~60 clickable area)
-        zIndex: 0,
+        width: '80%', // Takes up 80% of the tab's width
+        height: 44, // Slightly shorter than the 48 height before to fit nicely behind icon
+        borderRadius: 16,
+        top: -6, // Adjusted to perfectly center behind the icon
+        zIndex: -1,
     }
 });

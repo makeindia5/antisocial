@@ -31,7 +31,16 @@ exports.getUserChatGroups = async (req, res) => {
         const groups = await ChatGroup.find({ members: userId })
             .populate('lastMessage')
             .sort({ updatedAt: -1 });
-        res.json(groups);
+        const formattedGroups = groups.map(group => {
+            const g = group.toObject();
+            if (g.lastMessage) {
+                if (g.lastMessage.type === 'reel') g.lastMessage.content = 'Shared a reel';
+                else if (g.lastMessage.type === 'post') g.lastMessage.content = 'Shared a post';
+            }
+            return g;
+        });
+
+        res.json(formattedGroups);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

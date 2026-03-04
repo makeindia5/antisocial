@@ -21,8 +21,15 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/gd", require("./routes/gd"));
 app.use("/api/admin", require("./routes/admin"));
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+    const mongoose = require("mongoose");
+    const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+    res.status(200).json({ status: "ok", database: dbStatus });
+});
+
 // Initialize Socket.io
 socketController.init(server);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
 server.listen(PORT, '0.0.0.0', () => console.log(`Server running on ${PORT}`));

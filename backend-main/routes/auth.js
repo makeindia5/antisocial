@@ -100,6 +100,8 @@ router.post('/posts/like', postController.likePost);
 router.post('/posts/comment', postController.commentPost);
 router.post('/posts/delete', postController.deletePost);
 router.get('/posts/explore', postController.getExploreFeed);
+router.put('/posts/:id/settings', postController.updatePostSettings);
+router.put('/posts/:id/edit', postController.updatePostCaption);
 
 // Social System
 router.post('/social/follow', authController.followUser);

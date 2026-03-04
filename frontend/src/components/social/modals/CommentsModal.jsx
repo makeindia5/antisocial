@@ -86,7 +86,9 @@ const CommentsModal = ({ visible, onClose, comments, onAddComment }) => {
                                 {item.user?.profilePic ? (
                                     <Image source={{ uri: `${API_BASE.replace('/api/auth', '')}${item.user.profilePic}` }} style={{ width: 32, height: 32, borderRadius: 16 }} />
                                 ) : (
-                                    <Ionicons name="person-circle" size={32} color="#ccc" />
+                                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }}>
+                                        <Ionicons name="person" size={18} color="#8E8E93" />
+                                    </View>
                                 )}
                             </View>
                             <View style={styles.commentContent}>

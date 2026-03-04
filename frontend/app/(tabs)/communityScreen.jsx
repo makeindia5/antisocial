@@ -49,14 +49,6 @@ export default function CommunityScreen() {
         }
     }, [params?.tab]);
 
-    // Reset tab when mode changes (only if no param override in this render cycle, but param persists so it might stick.
-    // For now, let's keep the existing mode switch logic but maybe prioritize param if it just arrived?
-    // Actually, simply adding the param check is usually enough if the navigation passes it.
-    useEffect(() => {
-        if (activeMode === 'personal' && !params?.tab) setActiveTab('chats');
-        else if (activeMode === 'work') setActiveTab('home');
-        else if (activeMode === 'social') setActiveTab('home');
-    }, [activeMode]);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSidebar, setShowSidebar] = useState(false);
     const [archivedChatIds, setArchivedChatIds] = useState([]);
@@ -70,18 +62,18 @@ export default function CommunityScreen() {
         setSearchQuery('');
     }, [activeMode]);
 
-    // Sync activeTab when switching modes
+    // Unified Tab Management
     useEffect(() => {
-        // Mode switch animation
-        Animated.sequence([
-            Animated.timing(contentFadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-            Animated.timing(contentFadeAnim, { toValue: 1, duration: 250, useNativeDriver: true })
-        ]).start();
-
         // Mode specific defaults
         if (activeMode === 'personal') setActiveTab('chats');
         else if (activeMode === 'social') setActiveTab('home');
         else if (activeMode === 'work') setActiveTab('home');
+
+        // Mode switch animation
+        Animated.sequence([
+            Animated.timing(contentFadeAnim, { toValue: 0.7, duration: 100, useNativeDriver: true }),
+            Animated.timing(contentFadeAnim, { toValue: 1, duration: 250, useNativeDriver: true })
+        ]).start();
     }, [activeMode]);
     const userName = userProfile.name;
     const profilePic = userProfile.profilePic;
@@ -816,6 +808,7 @@ export default function CommunityScreen() {
         }
 
         if (activeMode === 'social' && tab === 'create') {
+            // ... (Create post logic unchanged)
             Alert.alert(
                 "Create Post",
                 "Select media from",
@@ -854,7 +847,14 @@ export default function CommunityScreen() {
             return;
         }
 
-        setActiveTab(tab);
+        if (tab !== activeTab) {
+            // Smooth transition for content
+            Animated.sequence([
+                Animated.timing(contentFadeAnim, { toValue: 0.7, duration: 100, useNativeDriver: true }),
+                Animated.timing(contentFadeAnim, { toValue: 1, duration: 200, useNativeDriver: true })
+            ]).start();
+            setActiveTab(tab);
+        }
     };
 
     const toggleUserSelection = (uid) => {
@@ -1639,7 +1639,7 @@ export default function CommunityScreen() {
                     onCreateStatus={handleCreateStory}
                     onViewStatus={handleViewStatus}
                     onRefresh={onRefresh}
-                    refreshing={socialRefreshing}
+                    refreshing={refreshing}
                 />
             );
         }
@@ -1666,7 +1666,16 @@ export default function CommunityScreen() {
             );
         }
         if (activeMode === 'social' && activeTab === 'reels') return <ReelsView theme={theme} onFullScreenChange={() => setIsFullScreen(!isFullScreen)} isFullScreen={isFullScreen} refreshTrigger={refreshing} reels={reels} onRefresh={fetchReels} refreshing={refreshing} />;
-        if (activeMode === 'social' && activeTab === 'profile') return <SocialProfile theme={theme} userId={currentUserId || 'check_auth'} isOwnProfile={true} />;
+        if (activeMode === 'social' && activeTab === 'profile') return (
+            <SocialProfile
+                theme={theme}
+                userId={currentUserId || 'check_auth'}
+                isOwnProfile={true}
+                statuses={groupedStatuses}
+                onViewStatus={handleViewStatus}
+                onCreateStatus={handleCreateStory}
+            />
+        );
 
         return null;
     }
@@ -1757,9 +1766,9 @@ export default function CommunityScreen() {
         <View style={styles.safeArea}>
             <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
 
-            <View style={styles.contentContainer}>
+            <Animated.View style={[styles.contentContainer, { opacity: contentFadeAnim }]}>
                 {renderContent()}
-            </View>
+            </Animated.View>
 
             <BottomNavBar
                 mode={activeMode}

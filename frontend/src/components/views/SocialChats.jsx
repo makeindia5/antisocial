@@ -63,10 +63,13 @@ export default function SocialChats({
             onPress={() => onChatSelect(item)}
         >
             <View style={[styles.activeAvatarContainer, { borderColor: theme.surface }]}>
-                <Image
-                    source={{ uri: `${SERVER_URL}${item.profilePic}` }}
-                    style={styles.activeAvatar}
-                />
+                {(item.profilePic && item.profilePic.trim() !== '') ? (
+                    <Image source={{ uri: item.profilePic.startsWith('http') ? item.profilePic : `${SERVER_URL}${item.profilePic}` }} style={styles.activeAvatar} />
+                ) : (
+                    <View style={[styles.activeAvatar, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Ionicons name="person" size={40} color="#8E8E93" />
+                    </View>
+                )}
                 <View style={styles.activeDot} />
             </View>
             <Text numberOfLines={1} style={[styles.activeName, { color: theme.textPrimary }]}>
@@ -81,10 +84,13 @@ export default function SocialChats({
             onPress={() => onChatSelect(item)}
             activeOpacity={0.7}
         >
-            <Image
-                source={{ uri: item.profilePic ? `${SERVER_URL}${item.profilePic}` : 'https://via.placeholder.com/50' }}
-                style={styles.chatAvatar}
-            />
+            {(item.profilePic && item.profilePic.trim() !== '') ? (
+                <Image source={{ uri: item.profilePic.startsWith('http') ? item.profilePic : `${SERVER_URL}${item.profilePic}` }} style={styles.chatAvatar} />
+            ) : (
+                <View style={[styles.chatAvatar, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Ionicons name="person" size={30} color="#8E8E93" />
+                </View>
+            )}
             <View style={styles.chatContent}>
                 <View style={styles.chatHeader}>
                     <Text style={[styles.chatName, { color: theme.textPrimary }]}>{item.name}</Text>

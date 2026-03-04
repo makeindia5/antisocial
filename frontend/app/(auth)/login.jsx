@@ -40,10 +40,11 @@ export default function LoginScreen() {
   };
 
   const handleLoginPress = async () => {
-    if (!email || !password) return Alert.alert("Error", "Please fill in all fields");
+    const trimmedEmail = email ? email.trim() : "";
+    if (!trimmedEmail || !password) return Alert.alert("Error", "Please fill in all fields");
     setLoading(true);
     try {
-      const user = await loginUser(email, password);
+      const user = await loginUser(trimmedEmail, password);
 
       if (user.role !== selectedRole) {
         Alert.alert("Access Denied", `You are not an ${selectedRole === 'admin' ? 'Admin' : 'User'}`);

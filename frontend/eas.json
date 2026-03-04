@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 7.0.0",
+    "version": ">= 16.13.3",
     "appVersionSource": "remote"
   },
   "build": {
@@ -12,10 +12,15 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "credentialsSource": "local"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
   }
 }

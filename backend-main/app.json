@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "3ac12d97-77d6-4057-9ef3-66039a3cd9bb"
+      }
+    },
+    "android": {
+      "package": "com.aayush_mali.backendmain"
+    }
+  }
+}
