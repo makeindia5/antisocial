@@ -46,9 +46,10 @@ jobs:
           port: 22
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/antisocial || exit
+            cd /opt/intraa || exit
             git pull
-            npm install
+            npm install --prefix backend-main
+            npm install --prefix backend-otp
             # Restart all apps defined in ecosystem.config.js
             pm2 startOrRestart ecosystem.config.js --env production
             pm2 save
