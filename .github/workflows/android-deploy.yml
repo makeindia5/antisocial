@@ -47,6 +47,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /opt/intraa || exit
+            git reset --hard
             git pull
             npm install --prefix backend-main
             npm install --prefix backend-otp
