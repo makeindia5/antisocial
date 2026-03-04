@@ -22,11 +22,14 @@ app.use("/api/gd", require("./routes/gd"));
 app.use("/api/admin", require("./routes/admin"));
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+const healthCheck = (req, res) => {
     const mongoose = require("mongoose");
     const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
     res.status(200).json({ status: "ok", database: dbStatus });
-});
+};
+
+app.get("/health", healthCheck);
+app.get("/api/auth/health", healthCheck);
 
 // Initialize Socket.io
 socketController.init(server);
