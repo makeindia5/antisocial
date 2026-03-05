@@ -54,7 +54,6 @@
           }
         }
       ],
-      "expo-barcode-scanner",
       "expo-asset"
     ],
     "extra": {
