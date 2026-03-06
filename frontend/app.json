@@ -2,7 +2,7 @@
   "expo": {
     "name": "INTRAA",
     "slug": "antisocial",
-    "version": "2.2.11",
+    "version": "2.2.12",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.antisocial.app",
-      "versionCode": 24,
+      "versionCode": 25,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#ffffff"
