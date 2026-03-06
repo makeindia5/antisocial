@@ -82,6 +82,8 @@ jobs:
             exit 1
           fi
           echo "Permissions validation passed. No invalid media permissions found."
+          # Restore the keystore file deleted by prebuild
+          git restore android/app/antisocial-upload.keystore
 
       - name: Build App
         working-directory: ./frontend
