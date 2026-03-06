@@ -16,7 +16,9 @@ jobs:
 
       - name: Recreate Play Store Key
         working-directory: ./frontend
-        run: echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > google-services-key.json
+        env:
+          GCP_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        run: echo "$GCP_KEY" > google-services-key.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
