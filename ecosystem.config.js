@@ -2,7 +2,8 @@ module.exports = {
     apps: [
         {
             name: "antisocial-main",
-            script: "./backend-main/server.js",
+            script: "./server.js",
+            cwd: "./backend-main",
             watch: false,
             env: {
                 NODE_ENV: "production",
@@ -11,7 +12,8 @@ module.exports = {
         },
         {
             name: "antisocial-otp",
-            script: "./backend-otp/index.js",
+            script: "./index.js",
+            cwd: "./backend-otp",
             watch: false,
             env: {
                 NODE_ENV: "production",

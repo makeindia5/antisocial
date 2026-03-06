@@ -61,6 +61,15 @@ jobs:
       - name: Wait for Backend
         run: sleep 20
 
+      - name: Verify No Local IPs
+        working-directory: ./frontend
+        run: |
+          if grep -r "192.168." src/; then
+            echo "Error: Hardcoded local IP addresses found in frontend source!"
+            exit 1
+          fi
+          echo "Validation passed: No local IPs found."
+
       - name: Verify API Health
         env:
           API_URL: https://gurudipaksalviprivatelimited.com/api/auth

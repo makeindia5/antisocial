@@ -1,4 +1,5 @@
-const OTP_BASE = "https://gurudipaksalviprivatelimited.com/otp";
+import { APP_CONFIG } from "../config";
+const OTP_BASE = APP_CONFIG.OTP_BASE;
 
 export const requestOTP = async (email) => {
     const res = await fetch(`${OTP_BASE}/send-otp`, {

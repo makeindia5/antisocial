@@ -1,4 +1,5 @@
-export const API_BASE = "http://192.168.29.129:5000/api/auth";
+import { APP_CONFIG } from "../config";
+export const API_BASE = APP_CONFIG.AUTH_BASE;
 
 export const authRequest = async (endpoint, body) => {
     console.log(`[API] Sending request to ${API_BASE}${endpoint}`, body);
