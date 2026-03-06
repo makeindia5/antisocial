@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import io from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SOCKET_URL = "http://192.168.29.129:5000";
+import { APP_CONFIG } from '../config';
+const SOCKET_URL = APP_CONFIG.SOCKET_URL;
 
 const SocketContext = createContext();
 

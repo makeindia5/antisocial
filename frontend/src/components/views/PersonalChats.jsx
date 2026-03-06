@@ -7,7 +7,8 @@ import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import Link from 'expo-router/link'; // Unused but keeping style
 import AsyncStorage from '@react-native-async-storage/async-storage';
-const SERVER_URL = "http://192.168.29.129:5000";
+import { APP_CONFIG } from '../../config';
+const SERVER_URL = APP_CONFIG.API_DOMAIN;
 
 const formatLastSeen = (dateString) => {
     if (!dateString) return '';

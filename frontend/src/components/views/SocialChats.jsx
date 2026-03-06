@@ -5,7 +5,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SERVER_URL = "http://192.168.29.129:5000";
+import { APP_CONFIG } from '../../config';
+const SERVER_URL = APP_CONFIG.API_DOMAIN;
 
 export default function SocialChats({
     users,
