@@ -73,6 +73,16 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
+      - name: Verify Media Permissions are Absent
+        working-directory: ./frontend
+        run: |
+          npx expo prebuild --platform android --no-install --clean
+          if grep -q "READ_MEDIA_IMAGES" android/app/src/main/AndroidManifest.xml || grep -q "READ_MEDIA_VIDEO" android/app/src/main/AndroidManifest.xml; then
+            echo "Error: Forbidden permissions READ_MEDIA_IMAGES or READ_MEDIA_VIDEO found in AndroidManifest.xml"
+            exit 1
+          fi
+          echo "Permissions validation passed. No invalid media permissions found."
+
       - name: Build App
         working-directory: ./frontend
         run: npx eas build --platform android --profile production --non-interactive

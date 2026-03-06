@@ -54,7 +54,13 @@
           }
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-media-library",
+        {
+          "granularPermissions": []
+        }
+      ]
     ],
     "extra": {
       "router": {
