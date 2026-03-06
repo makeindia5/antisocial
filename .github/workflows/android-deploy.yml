@@ -1,9 +1,7 @@
 name: Android Internal Deploy
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,7 +16,12 @@ jobs:
         working-directory: ./frontend
         env:
           GCP_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-        run: echo "$GCP_KEY" > google-services-key.json
+        run: |
+          if [ -z "$GCP_KEY" ]; then
+            echo "::error::GCP_SERVICE_ACCOUNT_KEY secret (job portal log) is missing or empty!"
+            exit 1
+          fi
+          echo "$GCP_KEY" > google-services-key.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
